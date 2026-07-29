@@ -1,4 +1,4 @@
-/* 
+/*
 * Não utilize o nome original do bot.
 * Utilize com respeito e responsabilidade.
 * Author: Yosh.
@@ -9,6 +9,14 @@ const { getContentType, jidNormalizedUser, proto, prepareWAMessageMedia, generat
 
 
 const { NomeDoBot, ownerName, prefix, channel, channeldl, API_URL, API_KEY_TOKITO, ownerNumber, CREDENTIALS_USER } = setting
+
+// Caminho do ffmpeg: usa o binario estatico (ffmpeg-static) quando disponivel
+// e cai pro ffmpeg do sistema caso contrario.
+let ffmpegBin = 'ffmpeg'
+try {
+const bin = require('ffmpeg-static')
+if (bin && fs.existsSync(bin)) ffmpegBin = bin
+} catch {}
 
 
 if (!fs.existsSync(path.dirname(arquivo))) fs.mkdirSync(path.dirname(arquivo), { recursive: true })
@@ -140,27 +148,65 @@ return padrao
 }
 }
 
+const arquivoLikeLimite = path.join(__dirname, 'DADOS_TOKITO', 'database', 'likes', 'limite-likes.json')
+if (!fs.existsSync(path.dirname(arquivoLikeLimite))) fs.mkdirSync(path.dirname(arquivoLikeLimite), { recursive: true })
+if (!fs.existsSync(arquivoLikeLimite)) fs.writeFileSync(arquivoLikeLimite, JSON.stringify({}, null, 2))
+
+const lerLikeLimite = () => {
+try {
+const dados = JSON.parse(fs.readFileSync(arquivoLikeLimite, 'utf8'))
+return dados && typeof dados === 'object' && !Array.isArray(dados) ? dados : {}
+} catch {
+return {}
+}
+}
+
+const salvarLikeLimite = dados => fs.writeFileSync(arquivoLikeLimite, JSON.stringify(dados, null, 2))
+
+const dataDeHoje = () => new Intl.DateTimeFormat('pt-BR', { timeZone: fuso, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).split('/').reverse().join('-')
+
+const LIMITE_LIKE_VIP = 7
+const LIMITE_LIKE_MEMBRO = 1
+
+const checarLimiteLike = (sender, vipAtivo) => {
+const dados = lerLikeLimite()
+const hoje = dataDeHoje()
+const registro = dados[sender]
+const usados = (registro && registro.data === hoje) ? registro.qtd : 0
+const limite = vipAtivo ? LIMITE_LIKE_VIP : LIMITE_LIKE_MEMBRO
+return { permitido: usados < limite, usados, limite, restante: Math.max(limite - usados, 0) }
+}
+
+const registrarUsoLike = sender => {
+const dados = lerLikeLimite()
+const hoje = dataDeHoje()
+const registro = dados[sender]
+const usados = (registro && registro.data === hoje) ? registro.qtd : 0
+dados[sender] = { data: hoje, qtd: usados + 1 }
+salvarLikeLimite(dados)
+}
+
 const dadosGrupo = (nome, jid) => [{
 name: nome || 'Grupo',
 groupId: jid,
 wellcome: [{
 bemvindo1: false,
 legendabv: `「🧊」 #numero#
-- *🧊 | ᴜɴ ɴᴜᴇᴠᴏ ᴍɪᴇᴍʙʀᴏ ʜᴀ ᴇɴᴛʀᴀᴅᴏ ᴀʟ ɢʀᴜᴘᴏ…* ↴
+- *🧊 | ᴜᴍ ɴᴏᴠᴏ ᴍᴇᴍʙʀᴏ ᴇɴᴛʀᴏᴜ ɴᴏ ɢʀᴜᴘᴏ…* ↴
 『🧊』ɢʀᴜᴘᴏ: #nomegrupo#
-『🧊』ᴍɪᴇᴍʙʀᴏs: #membros#
+『🧊』ᴍᴇᴍʙʀᴏs: #membros#
 『🧊』ᴇsᴛᴀᴅᴏ: #estado#
 『🧊』ʜᴏʀᴀ: #hora#
 
-*ᴇsᴛᴀᴍᴏs ᴍᴜʏ ꜰᴇʟɪᴄᴇs ᴅᴇ ᴛᴇɴᴇʀᴛᴇ ᴄᴏɴ ɴᴏsᴏᴛʀᴏs.*
-> *🧊 | ᴜsᴀ #prefixo#menu ᴘᴀʀᴀ ᴠᴇʀ ʟᴏs ᴄᴏᴍᴀɴᴅᴏs.*`,
+*ꜰɪᴄᴀᴍᴏꜱ ᴍᴜɪᴛᴏ ꜰᴇʟɪᴢᴇꜱ ᴘᴏʀ ᴛᴇʀ ᴠᴏᴄᴇ̂ ᴄᴏɴᴏꜱᴄᴏ.*
+> *🧊 | ᴜsᴇ #prefixo#menu ᴘᴀʀᴀ ᴠᴇʀ ᴏs ᴄᴏᴍᴀɴᴅᴏs.*`,
 legendasaiu: `「🧊」 #numero#
-- *🧊 | ᴜɴ ᴍɪᴇᴍʙʀᴏ ʜᴀ sᴀʟɪᴅᴏ ᴅᴇʟ ɢʀᴜᴘᴏ…* ↴
+- *🧊 | ᴜᴍ ᴍᴇᴍʙʀᴏ ꜱᴀɪᴜ ᴅᴏ ɢʀᴜᴘᴏ…* ↴
 『🧊』ɢʀᴜᴘᴏ: #nomegrupo#
-『🧊』ᴍɪᴇᴍʙʀᴏs: #membros#
+『🧊』ᴍᴇᴍʙʀᴏs: #membros#
 『🧊』ʜᴏʀᴀ: #hora#
 
-*ᴀɢʀᴀᴅᴇᴄᴇᴍᴏs ᴛᴜ ᴘᴀʀᴛɪᴄɪᴘᴀᴄɪᴏ́ɴ.*`,
+*ᴀɢʀᴀᴅᴇᴄᴇᴍᴏꜱ ᴘᴇʟᴀ ᴘᴀʀᴛɪᴄɪᴘᴀᴄ̧ᴀ̃ᴏ.*`,
 fundobv: null,
 fundobv_tipo: null,
 fundosaiu: null,
@@ -330,8 +376,8 @@ vipAlterado = true
 if (vipAlterado) fs.writeFileSync(caminhoVip, JSON.stringify(vip, null, 2))
 
 const isVip = vip.map(i => i.id).includes(sender) || SoDono
-const isCargo = SoDono ? 'Ama' : isVip ? 'VIP' : 'Miembro'
-const isChVip = isVip ? 'sɪ́ ✅' : 'ɴᴏ ❌'
+const isCargo = SoDono ? 'Mestre' : isVip ? 'VIP' : 'Membro'
+const isChVip = isVip ? 'ꜱɪᴍ ✅' : 'ɴᴀᴏ ❌'
 const Res_SoDono = mess.onlyOwner()
 
 // FUNÇÕES DE MARCAÇÕES ESSENCIAL \\
@@ -844,7 +890,7 @@ case 'selo': {
 if (!SoDono) return reply(Res_SoDono)
 
 nescessario.verificado = !nescessario.verificado
-fs.writeFileSync(caminhoNes, JSON.stringify(nescessario, null, 2))
+fs.writeFileSync('./DADOS_TOKITO/INFO_DADOS/nescessario.json', JSON.stringify(nescessario, null, 2))
 selo = nescessario.verificado ? SeloMeta : info
 
 if (nescessario.verificado) {
@@ -1063,7 +1109,7 @@ const temVideo = fs.existsSync(caminhoVideo)
 const temImagem = fs.existsSync(caminhoImagem)
 
 if (!temVideo && !temImagem) {
-return reply('❌ No se encontró ningún medio de menú')
+return reply('❌ Nenhuma mídia de menu encontrada')
 }
 
 const menuMedia = await prepareWAMessageMedia(
@@ -1072,17 +1118,17 @@ temVideo ? { video: { url: caminhoVideo }, mimetype: 'video/mp4', gifPlayback: t
 )
 
 const listaMenus = {
-title: '🧊⃞ ᴍᴇɴᴜ́-ʟɪsᴛᴀs ⃞🧊',
+title: '🧊⃞ ᴍᴇɴᴜ-ʟɪsᴛᴀs ⃞🧊',
 sections: [{
-title: '🧊⃞ ᴇʟɪɢᴇ ᴜɴ ᴍᴇɴᴜ́ ⃞🧊',
+title: '🧊⃞ ᴇsᴄᴏʟʜᴀ ᴜᴍ ᴍᴇɴᴜ ⃞🧊',
 rows: [
-{ title: '🧊⃞ ᴍᴇɴᴜ́ ᴘʀɪɴᴄɪᴘᴀʟ ⃞🧊', description: 'ᴍᴜᴇsᴛʀᴀ ʟᴏs ᴄᴏᴍᴀɴᴅᴏs ᴘʀɪɴᴄɪᴘᴀʟᴇs, ʀᴀɴᴅᴏᴍ ʏ ᴅᴇsᴄᴀʀɢᴀs.', id: `${prefix}menuzz` },
-{ title: '🧊⃞ ᴍᴇɴᴜ́ ᴀᴅᴍ ⃞🧊', description: 'ᴍᴜᴇsᴛʀᴀ ʟᴏs ᴄᴏᴍᴀɴᴅᴏs ᴅᴇ ᴀᴅᴍɪɴɪsᴛʀᴀᴄɪᴏ́ɴ ᴅᴇʟ ɢʀᴜᴘᴏ.', id: `${prefix}menuadm` },
-{ title: '🧊⃞ ᴍᴇɴᴜ́ ᴅᴜᴇɴ̃ᴀ ⃞🧊', description: 'ᴍᴜᴇsᴛʀᴀ ʟᴏs ᴄᴏᴍᴀɴᴅᴏs ᴇxᴄʟᴜsɪᴠᴏs ᴅᴇ ʟᴀ ᴅᴜᴇɴ̃ᴀ.', id: `${prefix}menudono` },
-{ title: '🧊⃞ ᴘɪɴɢ ⃞🧊', description: 'ᴍᴜᴇsᴛʀᴀ ʟᴀ ᴠᴇʟᴏᴄɪᴅᴀᴅ ʏ ᴇʟ ʀᴇɴᴅɪᴍɪᴇɴᴛᴏ ᴅᴇʟ ʙᴏᴛ.', id: `${prefix}ping` },
-{ title: '🧊⃞ ᴄʀᴇᴀᴅᴏʀᴀ ⃞🧊', description: 'ᴍᴜᴇsᴛʀᴀ ʟᴀ ɪɴғᴏʀᴍᴀᴄɪᴏ́ɴ ʏ ᴇʟ ᴄᴏɴᴛᴀᴄᴛᴏ ᴅᴇ ʟᴀ ᴄʀᴇᴀᴅᴏʀᴀ.', id: `${prefix}criador` },
-{ title: '🧊⃞ ᴅᴜᴇɴ̃ᴏs ⃞🧊', description: 'ᴍᴜᴇsᴛʀᴀ ᴛᴏᴅᴏs ʟᴏs ᴅᴜᴇɴ̃ᴏs ʀᴇɢɪsᴛʀᴀᴅᴏs ᴇɴ ᴇʟ ʙᴏᴛ.', id: `${prefix}donos` },
-{ title: '🧊⃞ ʟɪsᴛᴀ ᴠɪᴘ ⃞🧊', description: 'ᴍᴜᴇsᴛʀᴀ ᴛᴏᴅᴏs ʟᴏs ᴜsᴜᴀʀɪᴏs ᴠɪᴘ ʀᴇɢɪsᴛʀᴀᴅᴏs.', id: `${prefix}viplist` }
+{ title: '🧊⃞ ᴍᴇɴᴜ ᴘʀɪɴᴄɪᴘᴀʟ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴏs ᴄᴏᴍᴀɴᴅᴏs ᴘʀɪɴᴄɪᴘᴀɪs, ʀᴀɴᴅᴏᴍ ᴇ ᴅᴏᴡɴʟᴏᴀᴅs.', id: `${prefix}menuzz` },
+{ title: '🧊⃞ ᴍᴇɴᴜ ᴀᴅᴍ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴏs ᴄᴏᴍᴀɴᴅᴏs ᴅᴇ ᴀᴅᴍɪɴɪsᴛʀᴀᴄᴀᴏ ᴅᴏ ɢʀᴜᴘᴏ.', id: `${prefix}menuadm` },
+{ title: '🧊⃞ ᴍᴇɴᴜ ᴅᴏɴᴏ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴏs ᴄᴏᴍᴀɴᴅᴏs ᴇxᴄʟᴜsɪᴠᴏs ᴅᴏ ᴅᴏɴᴏ.', id: `${prefix}menudono` },
+{ title: '🧊⃞ ᴘɪɴɢ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴀ ᴠᴇʟᴏᴄɪᴅᴀᴅᴇ ᴇ ᴏ ᴅᴇsᴇᴍᴘᴇɴʜᴏ ᴅᴏ ʙᴏᴛ.', id: `${prefix}ping` },
+{ title: '🧊⃞ ᴄʀɪᴀᴅᴏʀ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴀs ɪɴғᴏʀᴍᴀᴄᴏᴇs ᴇ ᴏ ᴄᴏɴᴛᴀᴛᴏ ᴅᴏ ᴄʀɪᴀᴅᴏʀ.', id: `${prefix}criador` },
+{ title: '🧊⃞ ᴅᴏɴᴏs ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴛᴏᴅᴏs ᴏs ᴅᴏɴᴏs ᴄᴀᴅᴀsᴛʀᴀᴅᴏs ɴᴏ ʙᴏᴛ.', id: `${prefix}donos` },
+{ title: '🧊⃞ ʟɪsᴛᴀ ᴠɪᴘ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴛᴏᴅᴏs ᴏs ᴜsᴜᴀʀɪᴏs ᴠɪᴘ ᴄᴀᴅᴀsᴛʀᴀᴅᴏs.', id: `${prefix}viplist` }
 ]
 }]
 }
@@ -1098,15 +1144,15 @@ body: {
 text: `❪🧊.ꯧᴍᴇɴᴜ ʟɪsᴛꯧ⸼🧊❫
 ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
 ├⊹ 🧊 ʙᴏᴛ: ${NomeDoBot}
-├⊹ 🧊 ᴄʀᴇᴀᴅᴏʀᴀ: ${ownerName}
+├⊹ 🧊 ᴄʀɪᴀᴅᴏʀ: ${ownerName}
 ├⊹ 🧊 ᴜsᴜᴀʀɪᴏ: ${pushname}
-├⊹ 🧊 ʀᴀɴɢᴏ: ${isCargo}
+├⊹ 🧊 ᴄᴀʀɢᴏ: ${isCargo}
 ├⊹ 🧊 ᴠɪᴘ: ${isChVip}
 ├⊹ 🧊 ᴅɪsᴘᴏsɪᴛɪᴠᴏ: ${whatIsPhone}
 ├⊹ 🧊 ʙᴀɪʟᴇʏs: ${baileysVersion}
 ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛`
 },
-footer: { text: 'ᴇʟɪɢᴇ ᴜɴᴀ ᴏᴘᴄɪᴏ́ɴ ᴀʙᴀᴊᴏ' },
+footer: { text: 'ᴇsᴄᴏʟʜᴀ ᴜᴍᴀ ᴏᴘᴄᴀᴏ ᴀʙᴀɪxᴏ' },
 nativeFlowMessage: { buttons: [{ name: 'single_select', buttonParamsJson: JSON.stringify(listaMenus) }] }
 }]
 }
@@ -1124,7 +1170,7 @@ participant: selo.key.participant || selo.key.remoteJid,
 quotedMessage: selo.message,
 mentionedJid: [sender]
 },
-body: { text: `*🧊⃞ ᴀǫᴜɪ́ ᴇsᴛᴀ́ ᴛᴜ ᴍᴇɴᴜ́ ⃞🧊*` },
+body: { text: `*🧊⃞ ᴀǫᴜɪ ᴇsᴛᴀ sᴇᴜ ᴍᴇɴᴜ ⃞🧊*` },
 footer: { text: '' },
 carouselMessage: {
 cards: [{
@@ -1136,15 +1182,15 @@ body: {
 text: `❪🧊.ꯧᴍᴇɴᴜ ʟɪsᴛꯧ⸼🧊❫
 ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
 ├⊹ 🧊 ʙᴏᴛ: ${NomeDoBot}
-├⊹ 🧊 ᴄʀᴇᴀᴅᴏʀᴀ: ${ownerName}
+├⊹ 🧊 ᴄʀɪᴀᴅᴏʀ: ${ownerName}
 ├⊹ 🧊 ᴜsᴜᴀʀɪᴏ: ${pushname}
-├⊹ 🧊 ʀᴀɴɢᴏ: ${isCargo}
+├⊹ 🧊 ᴄᴀʀɢᴏ: ${isCargo}
 ├⊹ 🧊 ᴠɪᴘ: ${isChVip}
 ├⊹ 🧊 ᴅɪsᴘᴏsɪᴛɪᴠᴏ: ${whatIsPhone}
 ├⊹ 🧊 ʙᴀɪʟᴇʏs: ${baileysVersion}
 ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛`
 },
-footer: { text: 'ᴇʟɪɢᴇ ᴜɴᴀ ᴏᴘᴄɪᴏ́ɴ ᴀʙᴀᴊᴏ' },
+footer: { text: 'ᴇsᴄᴏʟʜᴀ ᴜᴍᴀ ᴏᴘᴄᴀᴏ ᴀʙᴀɪxᴏ' },
 nativeFlowMessage: { buttons: botoes }
 }]
 }
@@ -1176,8 +1222,8 @@ quoted: selo
 }
 break
 case 'menuadm': {
-if (!isGroup) return reply('*❌ | ᴇsᴛᴇ ᴍᴇɴᴜ́ sᴏ́ʟᴏ sᴇ ᴘᴜᴇᴅᴇ ᴀʙʀɪʀ ᴇɴ ɢʀᴜᴘᴏs.*')
-if (!isGroupAdmins) return reply('*❌ | ᴇsᴛᴇ ᴍᴇɴᴜ́ ᴇs ᴇxᴄʟᴜsɪᴠᴏ ᴘᴀʀᴀ ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀᴇs.*')
+if (!isGroup) return reply('*❌ | ᴇsᴛᴇ ᴍᴇɴᴜ sᴏ ᴘᴏᴅᴇ sᴇʀ ᴀʙᴇʀᴛᴏ ᴇᴍ ɢʀᴜᴘᴏs.*')
+if (!isGroupAdmins) return reply('*❌ | ᴇsᴛᴇ ᴍᴇɴᴜ ᴇ ᴇxᴄʟᴜsɪᴠᴏ ᴘᴀʀᴀ ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀᴇs.*')
 
 await yoshMenu(
 linguagem.menuadm(NomeDoBot, sender, isCargo, isChVip, horaBR, prefix, ownerName, baileysVersion)
@@ -1207,10 +1253,10 @@ break
 case 'play':
 case 'ytplay': {
 try {
-if (!q || !q.trim()) return reply(`*❌ | ᴘᴏʀ ғᴀᴠᴏʀ, ᴇsᴄʀɪʙᴇ ᴇʟ ɴᴏᴍʙʀᴇ ᴅᴇ ʟᴀ ᴄᴀɴᴄɪᴏ́ɴ.*
+if (!q || !q.trim()) return reply(`*❌ | ᴘᴏʀ ғᴀᴠᴏʀ, ɪɴsɪʀᴀ ᴏ ɴᴏᴍᴇ ᴅᴀ ᴍᴜsɪᴄᴀ.*
 
-*📌 | ᴇᴊᴇᴍᴘʟᴏ:*
-> ${prefix + command} ᴠᴇɴ ᴀᴄᴀ́`)
+*📌 | ᴇxᴇᴍᴘʟᴏ:*
+> ${prefix + command} ᴠᴇᴍ ᴄᴀ`)
 
 await reagir(from, '🎧')
 
@@ -1225,14 +1271,14 @@ headers: { 'User-Agent': 'Mozilla/5.0', accept: 'application/json' }
 
 if (!data?.status || !data?.resultado) {
 await reagir(from, '❌')
-return reply('*❌ | ɴᴏ ᴇɴᴄᴏɴᴛʀᴇ́ ɴɪɴɢᴜ́ɴ ᴀᴜᴅɪᴏ.*')
+return reply('*❌ | ɴᴀᴏ ᴇɴᴄᴏɴᴛʀᴇɪ ɴᴇɴʜᴜᴍ ᴀᴜᴅɪᴏ.*')
 }
 
 const res = data.resultado
-const title = String(res?.title || res?.titulo || 'ɴᴏ ᴇɴᴄᴏɴᴛʀᴀᴅᴏ')
-const canal = String(res?.canal || res?.channel || res?.author || 'ɴᴏ ᴇɴᴄᴏɴᴛʀᴀᴅᴏ')
+const title = String(res?.title || res?.titulo || 'ɴᴀᴏ ᴇɴᴄᴏɴᴛʀᴀᴅᴏ')
+const canal = String(res?.canal || res?.channel || res?.author || 'ɴᴀᴏ ᴇɴᴄᴏɴᴛʀᴀᴅᴏ')
 const duration = String(res?.duration || res?.duracao || '0:00')
-const views = String(res?.views_formatado || res?.views || 'ɴᴏ ɪɴғᴏʀᴍᴀᴅᴏ')
+const views = String(res?.views_formatado || res?.views || 'ɴᴀᴏ ɪɴғᴏʀᴍᴀᴅᴏ')
 const thumbnail = res?.image || res?.thumbnail || res?.thumb || null
 const url = String(res?.url || res?.link || pesquisa)
 const download = typeof res?.download === 'string' ? res.download : res?.download?.url || res?.download?.link || res?.audio || res?.audio_url || res?.download_url || null
@@ -1240,18 +1286,18 @@ const nomeArquivo = String(res?.filename || `${title}.mp3`).replace(/[\\/:*?"<>|
 
 if (!download) {
 await reagir(from, '❌')
-return reply('*❌ | ʟᴀ ᴀᴘɪ ɴᴏ ᴅᴇᴠᴏʟᴠɪᴏ́ ᴇʟ ᴇɴʟᴀᴄᴇ ᴅᴇʟ ᴀᴜᴅɪᴏ.*')
+return reply('*❌ | ᴀ ᴀᴘɪ ɴᴀᴏ ʀᴇᴛᴏʀɴᴏᴜ ᴏ ʟɪɴᴋ ᴅᴏ ᴀᴜᴅɪᴏ.*')
 }
 
 const texto = `*🎧 | ᴘʟᴀʏ ᴀᴜᴅɪᴏ*
 
 - *🤖 | ʙᴏᴛ → ${NomeDoBot}*
 - *👤 | ᴜsᴜᴀʀɪᴏ → ${pushname}*
-- *🎶 | ᴛɪ́ᴛᴜʟᴏ → ${title}*
+- *🎶 | ᴛɪᴛᴜʟᴏ → ${title}*
 - *📺 | ᴄᴀɴᴀʟ → ${canal}*
-- *⏱️ | ᴅᴜʀᴀᴄɪᴏ́ɴ → ${duration}*
-- *👁️ | ᴠɪsᴛᴀs → ${views}*
-- *🔗 | ᴇɴʟᴀᴄᴇ → ${url}*
+- *⏱️ | ᴅᴜʀᴀᴄᴀᴏ → ${duration}*
+- *👁️ | ᴠɪsᴜᴀʟɪᴢᴀᴄᴏᴇs → ${views}*
+- *🔗 | ʟɪɴᴋ → ${url}*
 
 > *⏳ ᴇɴᴠɪᴀɴᴅᴏ ᴀᴜᴅɪᴏ...*`
 
@@ -1288,19 +1334,19 @@ await reagir(from, '✅')
 console.log('[PLAY ERRO]', e?.response?.data || e)
 await reagir(from, '❌').catch(() => {})
 
-await reply(`*❌ | ᴇʀʀᴏʀ ᴀʟ ʙᴜsᴄᴀʀ ᴇʟ ᴀᴜᴅɪᴏ.*
+await reply(`*❌ | ᴇʀʀᴏ ᴀᴏ ʙᴜsᴄᴀʀ ᴏ ᴀᴜᴅɪᴏ.*
 
-> ${e?.response?.data?.mensagem || e?.response?.data?.resultado || e?.message || 'Error desconocido'}`)
+> ${e?.response?.data?.mensagem || e?.response?.data?.resultado || e?.message || 'Erro desconhecido'}`)
 }
 }
 break
 
 case 'play2': {
 try {
-if (!q || !q.trim()) return reply(`*❌ | ᴘᴏʀ ғᴀᴠᴏʀ, ᴇsᴄʀɪʙᴇ ᴇʟ ɴᴏᴍʙʀᴇ ᴅᴇ ʟᴀ ᴄᴀɴᴄɪᴏ́ɴ.*
+if (!q || !q.trim()) return reply(`*❌ | ᴘᴏʀ ғᴀᴠᴏʀ, ɪɴsɪʀᴀ ᴏ ɴᴏᴍᴇ ᴅᴀ ᴍᴜsɪᴄᴀ.*
 
-*📌 | ᴇᴊᴇᴍᴘʟᴏ:*
-> ${prefix + command} ᴠᴇɴ ᴀᴄᴀ́`)
+*📌 | ᴇxᴇᴍᴘʟᴏ:*
+> ${prefix + command} ᴠᴇᴍ ᴄᴀ`)
 
 await reagir(from, '🎧')
 await reply(mess.wait())
@@ -1316,28 +1362,28 @@ headers: { 'User-Agent': 'Mozilla/5.0', accept: 'application/json' }
 
 if (!data?.status || !data?.resultado) {
 await reagir(from, '❌')
-return reply('*❌ | ɴᴏ ᴇɴᴄᴏɴᴛʀᴇ́ ɴɪɴɢᴜ́ɴ ʀᴇsᴜʟᴛᴀᴅᴏ.*')
+return reply('*❌ | ɴᴀᴏ ᴇɴᴄᴏɴᴛʀᴇɪ ɴᴇɴʜᴜᴍ ʀᴇsᴜʟᴛᴀᴅᴏ.*')
 }
 
 const res = data.resultado
-const title = String(res?.title || res?.titulo || 'ɴᴏ ᴇɴᴄᴏɴᴛʀᴀᴅᴏ')
-const canal = String(res?.canal || res?.channel || res?.author || 'ɴᴏ ᴇɴᴄᴏɴᴛʀᴀᴅᴏ')
+const title = String(res?.title || res?.titulo || 'ɴᴀᴏ ᴇɴᴄᴏɴᴛʀᴀᴅᴏ')
+const canal = String(res?.canal || res?.channel || res?.author || 'ɴᴀᴏ ᴇɴᴄᴏɴᴛʀᴀᴅᴏ')
 const duration = String(res?.duration || res?.duracao || '0:00')
-const views = String(res?.views_formatado || res?.views || 'ɴᴏ ɪɴғᴏʀᴍᴀᴅᴏ')
+const views = String(res?.views_formatado || res?.views || 'ɴᴀᴏ ɪɴғᴏʀᴍᴀᴅᴏ')
 const thumbnail = res?.image || res?.thumbnail || res?.thumb || null
 const url = String(res?.url || res?.link || pesquisa)
 
-const texto = `*🎧 | ᴘʟᴀʏ ᴍᴜ́sɪᴄᴀ*
+const texto = `*🎧 | ᴘʟᴀʏ ᴍᴜsɪᴄᴀ*
 
 - *🤖 | ʙᴏᴛ → ${NomeDoBot}*
 - *👤 | ᴜsᴜᴀʀɪᴏ → ${pushname}*
-- *🎶 | ᴛɪ́ᴛᴜʟᴏ → ${title}*
+- *🎶 | ᴛɪᴛᴜʟᴏ → ${title}*
 - *📺 | ᴄᴀɴᴀʟ → ${canal}*
-- *⏱️ | ᴅᴜʀᴀᴄɪᴏ́ɴ → ${duration}*
-- *👁️ | ᴠɪsᴛᴀs → ${views}*
-- *🔗 | ᴇɴʟᴀᴄᴇ → ${url}*
+- *⏱️ | ᴅᴜʀᴀᴄᴀᴏ → ${duration}*
+- *👁️ | ᴠɪsᴜᴀʟɪᴢᴀᴄᴏᴇs → ${views}*
+- *🔗 | ʟɪɴᴋ → ${url}*
 
-> *📌 ᴇʟɪɢᴇ ᴇʟ ғᴏʀᴍᴀᴛᴏ ᴀʙᴀᴊᴏ.*`
+> *📌 ᴇsᴄᴏʟʜᴀ ᴏ ғᴏʀᴍᴀᴛᴏ ᴀʙᴀɪxᴏ.*`
 
 let header = proto.Message.InteractiveMessage.Header.create({
 hasMediaAttachment: false
@@ -1365,14 +1411,14 @@ buttons: [
 {
 name: 'quick_reply',
 buttonParamsJson: JSON.stringify({
-display_text: '🎧 DESCARGAR AUDIO',
+display_text: '🎧 BAIXAR ÁUDIO',
 id: `${prefix}play_audio ${url}`
 })
 },
 {
 name: 'quick_reply',
 buttonParamsJson: JSON.stringify({
-display_text: '🎥 DESCARGAR VIDEO',
+display_text: '🎥 BAIXAR VÍDEO',
 id: `${prefix}play_video ${url}`
 })
 }
@@ -1406,19 +1452,19 @@ await reagir(from, '✅')
 console.log('[PLAY2 ERRO]', e?.response?.data || e)
 await reagir(from, '❌').catch(() => {})
 
-await reply(`*❌ | ᴇʀʀᴏʀ ᴀʟ ʙᴜsᴄᴀʀ ʟᴀ ᴄᴀɴᴄɪᴏ́ɴ.*
+await reply(`*❌ | ᴇʀʀᴏ ᴀᴏ ʙᴜsᴄᴀʀ ᴀ ᴍᴜsɪᴄᴀ.*
 
-> ${e?.response?.data?.mensagem || e?.response?.data?.resultado || e?.message || 'Error desconocido'}`)
+> ${e?.response?.data?.mensagem || e?.response?.data?.resultado || e?.message || 'Erro desconhecido'}`)
 }
 }
 break
 
 case 'play_audio': {
 try {
-if (!q || !q.trim()) return reply(`*❌ | ᴇsᴄʀɪʙᴇ ᴇʟ ɴᴏᴍʙʀᴇ ᴏ ᴇɴʟᴀᴄᴇ ᴅᴇ ʟᴀ ᴄᴀɴᴄɪᴏ́ɴ.*
+if (!q || !q.trim()) return reply(`*❌ | ɪɴsɪʀᴀ ᴏ ɴᴏᴍᴇ ᴏᴜ ʟɪɴᴋ ᴅᴀ ᴍᴜsɪᴄᴀ.*
 
-*📌 | ᴇᴊᴇᴍᴘʟᴏ:*
-> ${prefix + command} ᴠᴇɴ ᴀᴄᴀ́`)
+*📌 | ᴇxᴇᴍᴘʟᴏ:*
+> ${prefix + command} ᴠᴇᴍ ᴄᴀ`)
 
 await reagir(from, '🎧')
 await reply(mess.wait())
@@ -1443,19 +1489,19 @@ await reagir(from, '✅')
 console.log('[PLAY AUDIO ERRO]', e?.response?.data || e)
 await reagir(from, '❌').catch(() => {})
 
-await reply(`*❌ | ᴇʀʀᴏʀ ᴀʟ ᴅᴇsᴄᴀʀɢᴀʀ ᴇʟ ᴀᴜᴅɪᴏ.*
+await reply(`*❌ | ᴇʀʀᴏ ᴀᴏ ʙᴀɪxᴀʀ ᴏ ᴀᴜᴅɪᴏ.*
 
-> ${e?.response?.data?.mensagem || e?.response?.data?.resultado || e?.message || 'Error desconocido'}`)
+> ${e?.response?.data?.mensagem || e?.response?.data?.resultado || e?.message || 'Erro desconhecido'}`)
 }
 }
 break
 
 case 'play_video': {
 try {
-if (!q || !q.trim()) return reply(`*❌ | ᴇsᴄʀɪʙᴇ ᴇʟ ɴᴏᴍʙʀᴇ ᴏ ᴇɴʟᴀᴄᴇ ᴅᴇʟ ᴠɪᴅᴇᴏ.*
+if (!q || !q.trim()) return reply(`*❌ | ɪɴsɪʀᴀ ᴏ ɴᴏᴍᴇ ᴏᴜ ʟɪɴᴋ ᴅᴏ ᴠɪᴅᴇᴏ.*
 
-*📌 | ᴇᴊᴇᴍᴘʟᴏ:*
-> ${prefix + command} ᴠᴇɴ ᴀᴄᴀ́`)
+*📌 | ᴇxᴇᴍᴘʟᴏ:*
+> ${prefix + command} ᴠᴇᴍ ᴄᴀ`)
 
 await reagir(from, '🎥')
 await reply(mess.wait())
@@ -1483,9 +1529,9 @@ await reagir(from, '✅')
 console.log('[PLAY VIDEO ERRO]', e?.response?.data || e)
 await reagir(from, '❌').catch(() => {})
 
-await reply(`*❌ | ᴇʀʀᴏʀ ᴀʟ ᴅᴇsᴄᴀʀɢᴀʀ ᴇʟ ᴠɪᴅᴇᴏ.*
+await reply(`*❌ | ᴇʀʀᴏ ᴀᴏ ʙᴀɪxᴀʀ ᴏ ᴠɪᴅᴇᴏ.*
 
-> ${e?.response?.data?.mensagem || e?.response?.data?.resultado || e?.message || 'Error desconocido'}`)
+> ${e?.response?.data?.mensagem || e?.response?.data?.resultado || e?.message || 'Erro desconhecido'}`)
 }
 }
 break
@@ -1508,11 +1554,11 @@ const heapUsado = (memoria.heapUsed / 1024 / 1024).toFixed(2)
 const ramTotal = (os.totalmem() / 1024 / 1024 / 1024).toFixed(2)
 const ramLivre = (os.freemem() / 1024 / 1024 / 1024).toFixed(2)
 
-await reply(`- *🏃‍♂️ | 𝐏𝐈𝐍𝐆 𝐃𝐄𝐋 𝐁𝐎𝐓*
-- *⚡ | 𝙻𝙰𝚃𝙴𝙽𝙲𝙸𝙰 → ${latencia} ms*
-- *🕒 | 𝙴𝙽 𝙻𝙸𝙽𝙴𝙰 → ${dias}d ${horas}h ${minutos}m ${segundos}s*
+await reply(`- *🏃‍♂️ | 𝐏𝐈𝐍𝐆 𝐃𝐎 𝐁𝐎𝐓*
+- *⚡ | 𝙻𝙰𝚃Ê𝙽𝙲𝙸𝙰 → ${latencia} ms*
+- *🕒 | 𝙾𝙽𝙻𝙸𝙽𝙴 → ${dias}d ${horas}h ${minutos}m ${segundos}s*
 - *🧠 | 𝙷𝙴𝙰𝙿 → ${heapUsado} MB*
-- *💻 | 𝚁𝙰𝙼 𝙻𝙸𝙱𝚁𝙴 → ${ramLivre} GB / ${ramTotal} GB*
+- *💻 | 𝚁𝙰𝙼 𝙻𝙸𝚅𝚁𝙴 → ${ramLivre} GB / ${ramTotal} GB*
 - *📦 | 𝙽𝙾𝙳𝙴 → ${process.version}*
 - *⚙️ | 𝙱𝙰𝙸𝙻𝙴𝚈𝚂 → ${baileysVersion}*`)
 }
@@ -1522,11 +1568,11 @@ break
 
 case 'criador': {
 const numeroCriador = String(ownerNumber || '').replace(/\D/g, '')
-await reply(`*👑 | ᴄʀᴇᴀᴅᴏʀᴀ ᴅᴇʟ ʙᴏᴛ*
+await reply(`*👑 | ᴄʀɪᴀᴅᴏʀ ᴅᴏ ʙᴏᴛ*
 
-*👤 | ɴᴏᴍʙʀᴇ:* ${ownerName}
-*📱 | ɴᴜ́ᴍᴇʀᴏ:* +${numeroCriador}
-*🔗 | ᴄᴏɴᴛᴀᴄᴛᴏ:* https://wa.me/${numeroCriador}`)
+*👤 | ɴᴏᴍᴇ:* ${ownerName}
+*📱 | ɴᴜᴍᴇʀᴏ:* +${numeroCriador}
+*🔗 | ᴄᴏɴᴛᴀᴛᴏ:* https://wa.me/${numeroCriador}`)
 }
 break
 
@@ -1544,22 +1590,22 @@ nmr = ''
 }
 
 const diasVip = Number(tempo50)
-if (!menc_os2 && !nmr) return reply(`*❌ | ᴏʟᴠɪᴅᴀsᴛᴇ ᴍᴇɴᴄɪᴏɴᴀʀ ᴀʟ ᴜsᴜᴀʀɪᴏ.*\n\n*📌 | ᴇᴊᴇᴍᴘʟᴏ:*\n> ${prefix + command} @usuario/30`)
-if (!Number.isInteger(diasVip) || diasVip < 0) return reply(`*❌ | ɪɴᴅɪᴄᴀ ʟᴀ ᴄᴀɴᴛɪᴅᴀᴅ ᴅᴇ ᴅɪ́ᴀs.*\n\n*📌 | ᴠɪᴘ ᴛᴇᴍᴘᴏʀᴀʟ:*\n> ${prefix + command} @usuario/30\n\n*📌 | ᴠɪᴘ ɪɴғɪɴɪᴛᴏ:*\n> ${prefix + command} @usuario/0`)
+if (!menc_os2 && !nmr) return reply(`*❌ | ᴠᴏᴄᴇ ᴇsǫᴜᴇᴄᴇᴜ ᴅᴇ ᴍᴀʀᴄᴀʀ ᴏ ᴜsᴜᴀʀɪᴏ.*\n\n*📌 | ᴇxᴇᴍᴘʟᴏ:*\n> ${prefix + command} @usuario/30`)
+if (!Number.isInteger(diasVip) || diasVip < 0) return reply(`*❌ | ɪɴғᴏʀᴍᴇ ᴀ ǫᴜᴀɴᴛɪᴅᴀᴅᴇ ᴅᴇ ᴅɪᴀs.*\n\n*📌 | ᴠɪᴘ ᴛᴇᴍᴘᴏʀᴀʀɪᴏ:*\n> ${prefix + command} @usuario/30\n\n*📌 | ᴠɪᴘ ɪɴғɪɴɪᴛᴏ:*\n> ${prefix + command} @usuario/0`)
 
 let usur = menc_os2 || nmr
 if (Array.isArray(usur)) usur = usur[0]
 usur = normalizar(usur)
 if (!String(usur).includes('@')) usur = `${String(usur).replace(/\D/g, '')}@s.whatsapp.net`
 
-if (!usur || usur === '@s.whatsapp.net') return reply('*❌ | ɴᴏ sᴇ ᴘᴜᴅᴏ ɪᴅᴇɴᴛɪғɪᴄᴀʀ ᴀʟ ᴜsᴜᴀʀɪᴏ.*')
+if (!usur || usur === '@s.whatsapp.net') return reply('*❌ | ɴᴀᴏ ғᴏɪ ᴘᴏssɪᴠᴇʟ ɪᴅᴇɴᴛɪғɪᴄᴀʀ ᴏ ᴜsᴜᴀʀɪᴏ.*')
 
 const indiceVip = vip.map(i => i.id).indexOf(usur)
 const infinito = diasVip === 0
 const agora = Date.now()
 
 if (indiceVip >= 0) {
-if (vip[indiceVip].infinito === true && !infinito) return reply('*❌ | ᴇsᴇ ᴜsᴜᴀʀɪᴏ ʏᴀ ᴛɪᴇɴᴇ ᴠɪᴘ ɪɴғɪɴɪᴛᴏ.*')
+if (vip[indiceVip].infinito === true && !infinito) return reply('*❌ | ᴇssᴇ ᴜsᴜᴀʀɪᴏ ᴊᴀ ᴘᴏssᴜɪ ᴠɪᴘ ɪɴғɪɴɪᴛᴏ.*')
 
 if (infinito) {
 vip[indiceVip].infinito = true
@@ -1588,8 +1634,8 @@ fs.writeFileSync(caminhoVip, JSON.stringify(vip, null, 2))
 
 await tokito.sendMessage(from, {
 text: infinito
-? `*✅ | @${usur.split('@')[0]} ғᴜᴇ ᴀɢʀᴇɢᴀᴅᴏ ᴀʟ ᴠɪᴘ ɪɴғɪɴɪᴛᴏ!*`
-: `*✅ | ¡sᴇ ᴀɢʀᴇɢᴀʀᴏɴ ${diasVip} ᴅɪ́ᴀ${diasVip !== 1 ? 's' : ''} ᴅᴇ ᴠɪᴘ ᴀ @${usur.split('@')[0]}!*`,
+? `*✅ | @${usur.split('@')[0]} ғᴏɪ ᴀᴅɪᴄɪᴏɴᴀᴅᴏ ᴀᴏ ᴠɪᴘ ɪɴғɪɴɪᴛᴏ!*`
+: `*✅ | ${diasVip} ᴅɪᴀ${diasVip !== 1 ? 's' : ''} ᴅᴇ ᴠɪᴘ ғᴏ${diasVip !== 1 ? 'ʀᴀᴍ' : 'ɪ'} ᴀᴅɪᴄɪᴏɴᴀᴅᴏ${diasVip !== 1 ? 's' : ''} ᴀ @${usur.split('@')[0]}!*`,
 contextInfo: { ...newsletter, mentionedJid: [usur] }
 }, { quoted: selo })
 }
@@ -1603,16 +1649,16 @@ if (Array.isArray(alvo)) alvo = alvo[0]
 alvo = normalizar(alvo)
 if (!String(alvo).includes('@')) alvo = `${String(alvo).replace(/\D/g, '')}@s.whatsapp.net`
 
-if (!alvo || alvo === '@s.whatsapp.net') return reply(`*❌ | ᴍᴇɴᴄɪᴏɴᴀ ᴀʟ ᴜsᴜᴀʀɪᴏ ᴏ ᴇsᴄʀɪʙᴇ ᴇʟ ɴᴜ́ᴍᴇʀᴏ.*\n\n> ${prefix + command} @usuario`)
+if (!alvo || alvo === '@s.whatsapp.net') return reply(`*❌ | ᴍᴀʀǫᴜᴇ ᴏ ᴜsᴜᴀʀɪᴏ ᴏᴜ ᴅɪɢɪᴛᴇ ᴏ ɴᴜᴍᴇʀᴏ.*\n\n> ${prefix + command} @usuario`)
 
 const indiceVip = vip.map(i => i.id).indexOf(alvo)
-if (indiceVip < 0) return reply('*❌ | ᴇsᴇ ᴜsᴜᴀʀɪᴏ ɴᴏ ᴇsᴛᴀ́ ᴇɴ ʟᴀ ʟɪsᴛᴀ ᴠɪᴘ.*')
+if (indiceVip < 0) return reply('*❌ | ᴇssᴇ ᴜsᴜᴀʀɪᴏ ɴᴀᴏ ᴇsᴛᴀ ɴᴀ ʟɪsᴛᴀ ᴠɪᴘ.*')
 
 vip.splice(indiceVip, 1)
 fs.writeFileSync(caminhoVip, JSON.stringify(vip, null, 2))
 
 await tokito.sendMessage(from, {
-text: `*✅ | ¡@${alvo.split('@')[0]} ғᴜᴇ ᴇʟɪᴍɪɴᴀᴅᴏ ᴅᴇ ʟᴀ ʟɪsᴛᴀ ᴠɪᴘ ᴄᴏɴ ᴇ́xɪᴛᴏ!*`,
+text: `*✅ | @${alvo.split('@')[0]} ғᴏɪ ʀᴇᴍᴏᴠɪᴅᴏ ᴅᴀ ʟɪsᴛᴀ ᴠɪᴘ ᴄᴏᴍ sᴜᴄᴇssᴏ!*`,
 contextInfo: { ...newsletter, mentionedJid: [alvo] }
 }, { quoted: selo })
 }
@@ -1620,7 +1666,7 @@ break
 
 case 'viplist':
 case 'listavip': {
-if (!vip.length) return reply('*📋 | ʜᴀʏ 0 ᴜsᴜᴀʀɪᴏs ᴠɪᴘ.*')
+if (!vip.length) return reply('*📋 | ᴇxɪsᴛᴇᴍ 0 ᴜsᴜᴀʀɪᴏs ᴠɪᴘ.*')
 
 const mentionsVip = vip.map(v => v.id)
 const listaVip = vip.map((v, index) => {
@@ -1632,11 +1678,11 @@ const diasRestantes = v.expiraEm
 : Number(v.dias || 0)
 const dataExpira = v.expiraEm
 ? new Date(v.expiraEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-: 'ɴᴏ ɪɴғᴏʀᴍᴀᴅᴀ'
-expiracao = `*${diasRestantes} ᴅɪ́ᴀ${diasRestantes !== 1 ? 's' : ''}*\n• ғᴇᴄʜᴀ: ${dataExpira}`
+: 'ɴᴀᴏ ɪɴғᴏʀᴍᴀᴅᴀ'
+expiracao = `*${diasRestantes} ᴅɪᴀ${diasRestantes !== 1 ? 's' : ''}*\n• ᴅᴀᴛᴀ: ${dataExpira}`
 }
 
-return `*[${index + 1}]* - @${v.id.split('@')[0]}\n• ᴇxᴘɪʀᴀᴄɪᴏ́ɴ: ${expiracao}`
+return `*[${index + 1}]* - @${v.id.split('@')[0]}\n• ᴇxᴘɪʀᴀᴄᴀᴏ: ${expiracao}`
 }).join('\n––\n')
 
 await tokito.sendMessage(from, {
@@ -1650,14 +1696,14 @@ case 'limparvip':
 case 'clearvip':
 case 'resetvip': {
 if (!SoDono) return reply(mess.onlyOwner())
-if (!vip.length) return reply('*❌ | ʟᴀ ʟɪsᴛᴀ ᴠɪᴘ ʏᴀ ᴇsᴛᴀ́ ᴠᴀᴄɪ́ᴀ.*')
+if (!vip.length) return reply('*❌ | ᴀ ʟɪsᴛᴀ ᴠɪᴘ ᴊᴀ ᴇsᴛᴀ ᴠᴀᴢɪᴀ.*')
 
 const totalVip = vip.length
 vip.splice(0, vip.length)
 fs.writeFileSync(caminhoVip, JSON.stringify(vip, null, 2))
 
 await tokito.sendMessage(from, {
-text: `*✅ | ¡@${sender.split('@')[0]} ʟɪᴍᴘɪᴏ́ ᴛᴏᴅᴀ ʟᴀ ʟɪsᴛᴀ ᴠɪᴘ!*\n\n*📊 | ᴛᴏᴛᴀʟ ᴇʟɪᴍɪɴᴀᴅᴏ: ${totalVip} ᴜsᴜᴀʀɪᴏ${totalVip !== 1 ? 's' : ''}.*`,
+text: `*✅ | @${sender.split('@')[0]} ʟɪᴍᴘᴏᴜ ᴛᴏᴅᴀ ᴀ ʟɪsᴛᴀ ᴠɪᴘ!*\n\n*📊 | ᴛᴏᴛᴀʟ ʀᴇᴍᴏᴠɪᴅᴏ: ${totalVip} ᴜsᴜᴀʀɪᴏ${totalVip !== 1 ? 's' : ''}.*`,
 contextInfo: { ...newsletter, mentionedJid: [sender] }
 }, { quoted: selo })
 }
@@ -1790,9 +1836,9 @@ const comandos = [...new Set(casos)].filter(Boolean)
 
 await reply(`*🧊 | ᴛᴏᴛᴀʟ ᴅᴇ ᴄᴏᴍᴀɴᴅᴏs*
 
-*📦 | ᴇsᴛᴀ ʙᴀsᴇ ᴛɪᴇɴᴇ:* ${comandos.length} ᴄᴏᴍᴀɴᴅᴏs
+*📦 | ᴇsᴛᴀ ʙᴀsᴇ ᴘᴏssᴜɪ:* ${comandos.length} ᴄᴏᴍᴀɴᴅᴏs
 *🤖 | ʙᴏᴛ:* ${NomeDoBot}
-*🧩 | ᴘʀᴇғɪᴊᴏ:* ${prefix}`)
+*🧩 | ᴘʀᴇғɪxᴏ:* ${prefix}`)
 } catch(e) {
 console.log('Erro no totalcmd:', e)
 await reply(mess.error())
@@ -1803,7 +1849,7 @@ case 'reiniciar':
 case 'r': {
 if (!SoDono) return reply(Res_SoDono)
 
-await reply('*ᴏᴋᴀʏ, ᴠᴏʏ ᴀ ʀᴇɪɴɪᴄɪᴀʀ, ᴇsᴘᴇʀᴀ ᴜɴ ᴍᴏᴍᴇɴᴛᴏ... 🙇‍♀️*')
+await reply('*ᴏᴋᴀʏ ᴍᴇsᴛʀᴇ, ɪʀᴇɪ ʀᴇɪɴɪᴄɪᴀʀ, ᴀɢᴜᴀʀᴅᴇ ᴜᴍ ᴍᴏᴍᴇɴᴛᴏ... 🙇‍♂️*')
 
 setTimeout(() => {
 process.exit(0)
@@ -1811,79 +1857,65 @@ process.exit(0)
 }
 break
 
-case 'manguito': {
-if (!SoDono) return reply(mess.onlyOwner())
-
-nescessario.manguito = !nescessario.manguito
-
-fs.writeFileSync(
-'./DADOS_TOKITO/INFO_DADOS/nescessario.json',
-JSON.stringify(nescessario, null, 2)
-)
-
-await reply(nescessario.manguito
-? `*✅ | ¡Modo MANGUITO activado!*\n\n> El comando *${prefix}like* ahora es gratis para todos, sean VIP o no.`
-: `*🚫 | Modo MANGUITO desactivado.*\n\n> El comando *${prefix}like* volvió a ser exclusivo para VIP.`)
-}
-break
-
 case 'info':
 case 'player':
 case 'perfil': {
 try {
-if (!SoDono && !isVip) return reply(`*🔒 | Este comando es solo para usuarios VIP.*\n\n> Usa *${prefix}criador* para saber cómo conseguir tu VIP.`)
-if (!q) return reply(`Usa: ${prefix}info <UID>`)
+if (!q) return reply(`Use: ${prefix}info <UID> [regiao]\n\nEx: ${prefix}info 123456789 BR`)
 
-const uid = q.replace(/\D/g, '')
-if (!uid || uid.length < 6) return reply('❌ ¡UID inválido! Usa solo números.')
+const partes = q.trim().split(/\s+/)
+const uid = String(partes[0] || '').replace(/\D/g, '')
+const region = String(partes[1] || 'BR').toUpperCase()
+if (!uid || uid.length < 6) return reply('❌ UID inválido! Use apenas números.')
 
-await reply('⏳ Consultando datos del jugador...')
+await reagir(from, '🔎')
 
 const API_KEY = 'permanente_fc5f4b82a52b482d2cdd'
 const BASE_URL = 'https://fluxggx.squareweb.app'
 
-const response = await axios.get(`${BASE_URL}/info-player?key=${API_KEY}&id=${uid}`)
+const { data } = await axios.get(`${BASE_URL}/info-player?key=${API_KEY}&uid=${uid}&region=${region}`, { validateStatus: () => true })
 
-if (!response.data.success) {
-return reply(`❌ ${response.data.message || 'Jugador no encontrado'}`)
+if (!data || !data.success) {
+await reagir(from, '❌')
+return reply(`❌ *${data?.message || 'Jogador não encontrado'}*\n> Código: ${data?.error || 'ERRO'}`)
 }
 
-const { conta, ranking, clan, pet, personagem } = response.data.data
+const b = data.data.basicInfo || {}
+const s = data.data.socialInfo || {}
+const dia = data.data.diamondCostRes || {}
+const cs = data.data.creditScoreInfo || {}
+const fmt = n => (n == null ? '—' : Number(n).toLocaleString('pt-BR'))
+const dataBR = ts => { const n = Number(ts); return n ? new Date(n * 1000).toLocaleDateString('pt-BR') : '—' }
 
-const info = `
-🌸 ✨ *${conta.nome}* ✨ 🌸
+const info = `╭─────「 👤 *PERFIL FREE FIRE* 」
+│
+│  🏷️  *${b.nickname || 'Jogador'}*
+│  🆔  ${b.accountId || uid}
+│
+├─「 📊 *Conta* 」
+│  ⭐  Nível: *${b.level ?? '—'}*  ·  EXP: ${fmt(b.exp)}
+│  🌍  Região: *${b.region || region}*
+│  🎮  Versão: ${b.releaseVersion || '—'}
+│  📅  Criada: ${dataBR(b.createAt)}
+│
+├─「 🏆 *Ranking* 」
+│  🥇  BR: ${fmt(b.rank)}  ·  ${fmt(b.rankingPoints)} pts
+│  🎯  CS: ${fmt(b.csRank)}  (máx ${fmt(b.csMaxRank ?? b.maxRank)})
+│  🗓️  Temporada: ${b.seasonId ?? '—'}
+│
+├─「 💎 *Extras* 」
+│  💎  Diamantes gastos: ${fmt(dia.diamondCost)}
+│  🔰  Credit Score: ${cs.creditScore ?? '—'}
+│  ✍️  ${s.signature || 'Sem assinatura'}
+│
+╰─────「 ${NomeDoBot} 」`
 
-├─ 🆔 UID: ${conta.id}
-├─ 🌟 Nivel: ${conta.nivel}
-├─ 💎 Likes: ${conta.curtidas.toLocaleString('es-ES')}
-├─ 🌍 Región: ${conta.regiao}
-├─ 📝 Bio: ${conta.bio || 'Sin bio'}
-├─ 📅 Creada: ${conta.criada_em}
-└─ 🔄 Último acceso: ${conta.ultimo_login}
-
-🌸 *🏆 RANKING* 🌸
-├─ 🇧🇷 BR: ${ranking.br_patente} (${ranking.br_pontos} pts)
-└─ 🎯 CS: ${ranking.cs_patente} (${ranking.cs_pontos} pts)
-
-🌸 *👥 CLAN* 🌸
-├─ 🏢 ${clan.nome}
-├─ 🆔 ID: ${clan.id}
-├─ 📈 Nivel: ${clan.nivel}
-├─ 👥 Miembros: ${clan.membros}
-└─ 👑 Líder: ${clan.lider}
-
-🌸 *🦅 MASCOTA* 🌸
-└─ 🦅 ${pet.nome} (Nivel ${pet.nivel})
-
-🌸 *👕 PERSONAJE* 🌸
-├─ 🎭 Equipados: ${personagem.equipados.join(', ')}
-└─ 🎨 Skins: ${personagem.skins_arma}
-`
-
+await reagir(from, '✅')
 return reply(info)
 } catch (error) {
 console.error('Erro ao consultar info:', error.message)
-return reply(`❌ Error al consultar jugador: ${error.message}`)
+await reagir(from, '❌').catch(() => {})
+return reply(`❌ Erro ao consultar jogador: ${error.message}`)
 }
 }
 break
@@ -1892,13 +1924,12 @@ case 'skin':
 case 'personagem':
 case 'character': {
 try {
-if (!SoDono && !isVip) return reply(`*🔒 | Este comando es solo para usuarios VIP.*\n\n> Usa *${prefix}criador* para saber cómo conseguir tu VIP.`)
-if (!q) return reply(`Usa: ${prefix}skin <UID>`)
+if (!q) return reply(`Use: ${prefix}skin <UID>`)
 
 const uid = q.replace(/\D/g, '')
-if (!uid || uid.length < 6) return reply('❌ ¡UID inválido! Usa solo números.')
+if (!uid || uid.length < 6) return reply('❌ UID inválido! Use apenas números.')
 
-await reply('⏳ Generando imagen del personaje...')
+await reply('⏳ Gerando imagem do personagem...')
 
 const API_KEY = 'permanente_fc5f4b82a52b482d2cdd'
 const BASE_URL = 'https://fluxggx.squareweb.app'
@@ -1906,7 +1937,7 @@ const BASE_URL = 'https://fluxggx.squareweb.app'
 const response = await axios.get(`${BASE_URL}/get-skin?key=${API_KEY}&id=${uid}`)
 
 if (!response.data.success) {
-return reply(`❌ ${response.data.message || 'Jugador no encontrado'}`)
+return reply(`❌ ${response.data.message || 'Jogador não encontrado'}`)
 }
 
 const { conta, imagem } = response.data.data
@@ -1916,10 +1947,10 @@ const imageBuffer = Buffer.from(imageResponse.data, 'binary')
 
 const caption = `
 👤 *${conta.nome}*
-📊 Nivel: ${conta.nivel}
-❤️ Likes: ${conta.curtidas.toLocaleString('es-ES')}
+📊 Nível: ${conta.nivel}
+❤️ Likes: ${conta.curtidas.toLocaleString('pt-BR')}
 
-_Imagen del personaje con skins_
+_Imagem do personagem com skins_
 `
 
 await tokito.sendMessage(from, {
@@ -1929,7 +1960,7 @@ caption: caption
 
 } catch (error) {
 console.error('Erro ao gerar skin:', error.message)
-return reply(`❌ Error al generar imagen: ${error.message}`)
+return reply(`❌ Erro ao gerar imagem: ${error.message}`)
 }
 }
 break
@@ -1938,42 +1969,87 @@ case 'like':
 case 'curtida':
 case 'enviarlike': {
 try {
-if (!SoDono && !isVip && !nescessario.manguito) return reply(`*🔒 | Este comando es solo para usuarios VIP.*\n\n> Usa *${prefix}criador* para saber cómo conseguir tu VIP.`)
-if (!q) return reply(`Usa: ${prefix}like <UID>`)
+if (!q) return reply(`Use: ${prefix}like <UID> [regiao]\n\nEx: ${prefix}like 123456789 BR`)
 
-const uid = q.replace(/\D/g, '')
-if (!uid || uid.length < 6) return reply('❌ ¡UID inválido! Usa solo números.')
+const partes = q.trim().split(/\s+/)
+const uid = String(partes[0] || '').replace(/\D/g, '')
+const region = String(partes[1] || 'BR').toUpperCase()
+if (!uid || uid.length < 6) return reply('❁ ┊ UID inválido, amora! Use apenas números. 🎀')
 
-await reply('⏳ Enviando likes...')
+const limiteInfo = checarLimiteLike(sender, isVip)
+if (!limiteInfo.permitido) {
+return reply(`╭┈┈┈❁˚ 🎀 ˚❁┈┈┈╮
+   *ʟɪᴍɪᴛᴇ ᴅɪᴀ́ʀɪᴏ ᴀᴛɪɴɢɪᴅᴏ*
+╰┈┈┈❁˚ 🎀 ˚❁┈┈┈╯
+
+✿ Poxa, ${isVip ? 'você já usou seus' : 'você já usou seu'} *${limiteInfo.limite}* ${limiteInfo.limite > 1 ? 'likes de hoje' : 'like de hoje'} 🥺💗
+
+${isVip ? '💎 Você já é *VIP*, volte amanhã pra mandar mais likes!' : `🔓 Quer mandar até *${LIMITE_LIKE_VIP}x* por dia? Vire *VIP* e libere mais likes, flor! 🌸`}
+
+╰────── ${NomeDoBot} ──────╯`)
+}
+
+await reagir(from, '❤️')
 
 const API_KEY = 'permanente_fc5f4b82a52b482d2cdd'
 const BASE_URL = 'https://fluxggx.squareweb.app'
 
-const response = await axios.get(`${BASE_URL}/send-like?key=${API_KEY}&id=${uid}`)
+const { data } = await axios.get(`${BASE_URL}/send-like?key=${API_KEY}&uid=${uid}&region=${region}&token=100`, { validateStatus: () => true })
 
-if (!response.data.sucesso) {
-if (response.data.em_recarga) {
-return reply(`⏳ *Espera la recarga*\n\n⏰ Tiempo restante: ${response.data.restante}\n📅 Próxima vez: ${response.data.proxima_vez_br}\n\n_Este ID ya recibió likes recientemente._`)
+if (!data || !data.sucesso) {
+await reagir(from, '⏳')
+if (data && data.em_recarga) {
+return reply(`╭─────「 ⏳ *EM RECARGA* 」
+│
+│  🆔  ${uid}
+│  ⏰  Falta: *${data.restante || '—'}*
+│  📅  Volta: ${data.proxima_vez_br || '—'}
+│
+╰─「 _Esse ID já recebeu likes hoje._ 」`)
 }
-return reply(`❌ ${response.data.mensagem || 'Error al enviar likes'}`)
+return reply(`❌ *${data?.mensagem || data?.message || 'Não foi possível enviar os likes.'}*`)
 }
 
-const info = `
-🌸 *❤️ LIKES ENVIADOS* 🌸
+registrarUsoLike(sender)
+const limiteApos = checarLimiteLike(sender, isVip)
 
-├─ 👤 ${response.data.nome}
-├─ 🌟 Nivel: ${response.data.nivel}
-├─ 📊 Antes: ${response.data.antes.toLocaleString('es-ES')}
-├─ ➕ Enviados: ${response.data.enviadas.toLocaleString('es-ES')}
-└─ 📈 Después: ${response.data.depois.toLocaleString('es-ES')}
+const c = (data.data && data.data.conta) || {}
+const L = (data.data && data.data.likes) || {}
+const fmt = n => (n == null ? '—' : Number(String(n).replace(/\./g, '')).toLocaleString('pt-BR'))
 
-_¡Likes agregados con éxito!_ ✨
-`
+// nível real (best-effort)
+let linhaNivel = ''
+try {
+const inf = await axios.get(`${BASE_URL}/info-player?key=${API_KEY}&uid=${uid}&region=${region}`, { validateStatus: () => true })
+const nivel = inf.data?.success ? (inf.data.data?.basicInfo?.level ?? null) : null
+if (nivel != null) linhaNivel = `\n│  ⭐  Nível: ${nivel}`
+} catch {}
 
+const info = `╭┈┈┈❁˚ 💗 ˚❁┈┈┈╮
+   *ʟɪᴋᴇs ᴇɴᴠɪᴀᴅᴏs* 🎀
+╰┈┈┈❁˚ 💗 ˚❁┈┈┈╯
+
+🏷️  *${c.nome_conta || data.nome || 'Jogador'}*
+🆔  ${uid}${linhaNivel}
+🌍  Região: ${c.region || region}
+
+✿┈┈┈┈┈┈┈┈┈┈┈┈┈✿
+📊  Antes: ${fmt(L.antes)}
+➕  Enviados: *${fmt(L.enviadas)}*
+🚀  Depois: ${fmt(L.depois)}
+✿┈┈┈┈┈┈┈┈┈┈┈┈┈✿
+
+🎟️  ${isVip ? '💎 Status: VIP' : '🌷 Status: Membro'}
+📅  Usados hoje: *${limiteApos.usados}/${limiteApos.limite}*
+
+╰─「 ✅ _Enviado com carinho · ${NomeDoBot}_ 」`
+
+await reagir(from, '✅')
 return reply(info)
 } catch (error) {
 console.error('Erro ao enviar likes:', error.message)
-return reply(`❌ Error al enviar likes: ${error.message}`)
+await reagir(from, '❌').catch(() => {})
+return reply(`❌ Erro ao enviar likes: ${error.message}`)
 }
 }
 break
@@ -1982,48 +2058,197 @@ case 'likestatus':
 case 'status':
 case 'recarga': {
 try {
-if (!SoDono && !isVip) return reply(`*🔒 | Este comando es solo para usuarios VIP.*\n\n> Usa *${prefix}criador* para saber cómo conseguir tu VIP.`)
-if (!q) return reply(`Usa: ${prefix}likestatus <UID>`)
+if (!q) return reply(`Use: ${prefix}likestatus <UID>`)
 
 const uid = q.replace(/\D/g, '')
-if (!uid || uid.length < 6) return reply('❌ ¡UID inválido! Usa solo números.')
+if (!uid || uid.length < 6) return reply('❌ UID inválido! Use apenas números.')
 
 const API_KEY = 'permanente_fc5f4b82a52b482d2cdd'
 const BASE_URL = 'https://fluxggx.squareweb.app'
 
-const response = await axios.get(`${BASE_URL}/like-status?key=${API_KEY}&id=${uid}`)
+const { data } = await axios.get(`${BASE_URL}/like-status?key=${API_KEY}&id=${uid}`, { validateStatus: () => true })
 
-if (!response.data.success) {
-return reply(`❌ Error al consultar estado`)
+if (!data || !data.success) {
+return reply(`❌ *Não consegui consultar o status.*`)
 }
 
-if (response.data.em_recarga) {
-const info = `
-🌸 *⏳ ESPERA LA RECARGA* 🌸
-
-├─ 🆔 UID: ${response.data.id}
-├─ ❌ Puede enviar: No
-├─ ⏰ Tiempo restante: ${response.data.restante}
-└─ 📅 Próxima vez: ${response.data.proxima_vez_br}
-
-_${response.data.mensagem}_
-`
-return reply(info)
-} else {
-const info = `
-🌸 *✅ LISTO PARA RECIBIR* 🌸
-
-├─ 🆔 UID: ${response.data.id}
-├─ ✅ Puede enviar: Sí
-└─ 💎 Estado: Activo
-
-_${response.data.mensagem}_ ✨
-`
-return reply(info)
+if (data.em_recarga) {
+return reply(`╭─────「 ⏳ *AGUARDE A RECARGA* 」
+│
+│  🆔  ${data.id || uid}
+│  ❌  Pode enviar: *Não*
+│  ⏰  Falta: *${data.restante || '—'}*
+│  📅  Volta: ${data.proxima_vez_br || '—'}
+│
+╰─「 ${NomeDoBot} 」`)
 }
+
+return reply(`╭─────「 ✅ *PRONTO PRA RECEBER* 」
+│
+│  🆔  ${data.id || uid}
+│  ✅  Pode enviar: *Sim*
+│  💎  Status: Ativo
+│
+╰─「 ${NomeDoBot} 」`)
 } catch (error) {
 console.error('Erro ao verificar status:', error.message)
-return reply(`❌ Error al verificar estado: ${error.message}`)
+return reply(`❌ Erro ao verificar status: ${error.message}`)
+}
+}
+break
+
+case 'st':
+case 'stk':
+case 'f':
+case 'fig':
+case 'figu':
+case 'sticker':
+case 'fsticker':
+case 's': {
+const contexto = info.message?.extendedTextMessage?.contextInfo || info.message?.imageMessage?.contextInfo || info.message?.videoMessage?.contextInfo || {}
+const marcada = contexto.quotedMessage || mensagem || {}
+const midia = marcada?.ephemeralMessage?.message || marcada?.viewOnceMessage?.message || marcada?.viewOnceMessageV2?.message || marcada?.viewOnceMessageV2Extension?.message || marcada
+const imagem = midia?.imageMessage
+const video = midia?.videoMessage
+
+if (!imagem && !video) return reply(mess.marqueMidia ? mess.marqueMidia() : '*Marque uma imagem ou vídeo (máx. 10s) com o comando.*')
+if (video && video.seconds > 10) return reply('*O vídeo precisa ter no máximo 10 segundos.*')
+
+try {
+await reagir(from, '⏳')
+const { exec } = require('child_process')
+const entrada = path.join(os.tmpdir(), `stk_${Date.now()}.${video ? 'mp4' : 'png'}`)
+const saida = path.join(os.tmpdir(), `stk_${Date.now()}.webp`)
+const buffer = await getFileBuffer(video || imagem, video ? 'video' : 'image')
+fs.writeFileSync(entrada, buffer)
+
+const cmd = video
+? `"${ffmpegBin}" -i "${entrada}" -vcodec libwebp -filter:v fps=fps=15 -lossless 0 -compression_level 6 -q:v 50 -loop 0 -preset default -an -vsync 0 -s 512:512 "${saida}"`
+: `"${ffmpegBin}" -i "${entrada}" -vcodec libwebp -filter:v scale=512:512:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:-1:-1:color=#00000000 -lossless 1 -q:v 100 "${saida}"`
+
+exec(cmd, async (err) => {
+try {
+if (err || !fs.existsSync(saida)) { await reagir(from, '❌'); return reply(mess.error()) }
+const webp = fs.readFileSync(saida)
+await tokito.sendMessage(from, { sticker: webp, contextInfo: { ...newsletter } }, { quoted: selo })
+await reagir(from, '✅')
+} catch (e) {
+console.log('Erro ao enviar sticker:', e)
+await reply(mess.error())
+} finally {
+try { if (fs.existsSync(entrada)) fs.unlinkSync(entrada) } catch {}
+try { if (fs.existsSync(saida)) fs.unlinkSync(saida) } catch {}
+}
+})
+} catch (e) {
+console.log('Erro no sticker:', e)
+await reagir(from, '❌')
+await reply(mess.error())
+}
+}
+break
+
+case 'guilda':
+case 'buscarguilda':
+case 'guildas': {
+try {
+if (!q) return reply(`Use: ${prefix}guilda <nome> [regiao]\n\nEx: ${prefix}guilda ROOT KILL BR`)
+
+const regioes = ['BR','US','SAC','NA','IND','BD','ID','ME','VN','TH','CIS','PK','SG','EU','TW']
+const partes = q.trim().split(/\s+/)
+let region = 'BR'
+if (partes.length > 1 && regioes.includes(partes[partes.length - 1].toUpperCase())) {
+region = partes.pop().toUpperCase()
+}
+const nome = partes.join(' ').trim()
+if (!nome) return reply('❌ Informe o nome da guilda.')
+
+await reagir(from, '🔎')
+
+const KEY_FFS = 'ggx_e8aad50f78d8b41eb5382eb8fc2883640f17537d7d868e7b'
+const BASE_FFS = 'https://freefireservices.com'
+
+const { data } = await axios.get(`${BASE_FFS}/api/v1/guildas/search?name=${encodeURIComponent(nome)}&region=${region}&key=${KEY_FFS}`, { validateStatus: () => true })
+
+if (!data || !data.success || !Array.isArray(data.data) || data.data.length === 0) {
+await reagir(from, '❌')
+return reply(`❌ *${data?.message || 'Nenhuma guilda encontrada'}*\n> Código: ${data?.error || 'GUILD_NOT_FOUND'}`)
+}
+
+const fmt = n => (n == null ? '—' : Number(n).toLocaleString('pt-BR'))
+const dataBR = ts => { const n = Number(ts); return n ? new Date(n * 1000).toLocaleDateString('pt-BR') : '—' }
+
+let txt = `╭─────「 🏰 *BUSCA DE GUILDA* 」\n│  🔎 Resultados: *${data.total ?? data.data.length}*\n│  🌍 Região: *${region}*\n╰─────\n`
+
+for (const g of data.data.slice(0, 5)) {
+txt += `\n╭─「 ⚔️ *${g.guildName || 'Guilda'}* 」\n│  🆔  ${g.guildId || '—'}\n│  📜  ${g.guildSlogan || 'Sem slogan'}\n│  👑  Líder UID: ${g.leaderUid || '—'}\n│  ⭐  Nível: ${g.guildLevel ?? '—'}  ·  👥 ${g.totalMembers ?? '—'} membros\n│  🎯  Req: Nível ${fmt(g.minLevelRequired)} · BR ${fmt(g.minBrRankRequired)} · CS ${fmt(g.minCsRankRequired)}\n│  📊  Pontos: ${fmt(g.totalActivityPoints)} (semana ${fmt(g.weeklyActivityPoints)})\n│  📅  Criada: ${dataBR(g.creationTime)}\n╰─────\n`
+}
+
+txt += `\n> ${NomeDoBot}`
+
+await reagir(from, '✅')
+return reply(txt.trim())
+} catch (error) {
+console.error('Erro ao buscar guilda:', error.message)
+await reagir(from, '❌').catch(() => {})
+return reply(`❌ Erro ao buscar guilda: ${error.message}`)
+}
+}
+break
+
+case 'guildainfo':
+case 'infoguilda':
+case 'guildaid': {
+try {
+if (!q) return reply(`Use: ${prefix}guildainfo <ID> [regiao]\n\nEx: ${prefix}guildainfo 2006911795 BR`)
+
+const partes = q.trim().split(/\s+/)
+const uid = String(partes[0] || '').replace(/\D/g, '')
+const region = String(partes[1] || 'BR').toUpperCase()
+if (!uid || uid.length < 6) return reply('❌ ID da guilda inválido! Use apenas números.')
+
+await reagir(from, '🔎')
+
+const KEY_FFS = 'ggx_e8aad50f78d8b41eb5382eb8fc2883640f17537d7d868e7b'
+const BASE_FFS = 'https://freefireservices.com'
+
+const { data } = await axios.get(`${BASE_FFS}/api/v1/guildas/info?uid=${uid}&region=${region}&key=${KEY_FFS}`, { validateStatus: () => true })
+
+if (!data || !data.success || !data.data) {
+await reagir(from, '❌')
+return reply(`❌ *${data?.message || 'Guilda não encontrada'}*\n> Código: ${data?.error || 'GUILD_NOT_FOUND'}`)
+}
+
+const g = data.data
+const fmt = n => (n == null ? '—' : Number(n).toLocaleString('pt-BR'))
+
+const info = `╭─────「 🏰 *INFO DA GUILDA* 」
+│
+│  ⚔️  *${g.guildName || 'Guilda'}*
+│  🆔  ${g.guildId || uid}
+│  🌍  Região: *${g.region || region}*
+│  💬  ${g.welcomeMessage || 'Sem mensagem'}
+│
+├─「 📊 *Status* 」
+│  💰  Saldo: ${fmt(g.balance)}
+│  🏅  Score: ${fmt(g.score)}
+│  ✨  XP: ${fmt(g.xp)}
+│  ⬆️  Upgrades: ${fmt(g.upgrades)}
+│  🏆  Conquistas: ${fmt(g.achievements)}
+│  ⏱️  Tempo de jogo: ${fmt(g.playTime)}
+│
+├─「 👥 *Membros* 」
+│  👤  ${fmt(g.totalMembers)} / ${fmt(g.maxMembers)}
+│  📅  Criada: ${g.created_at || '—'}
+│
+╰─────「 ${NomeDoBot} 」`
+
+await reagir(from, '✅')
+return reply(info)
+} catch (error) {
+console.error('Erro ao consultar guilda:', error.message)
+await reagir(from, '❌').catch(() => {})
+return reply(`❌ Erro ao consultar guilda: ${error.message}`)
 }
 }
 break
