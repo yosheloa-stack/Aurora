@@ -279,12 +279,13 @@ return
 
 metodo = 'codigo'
 
-for (let tentativa = 1; tentativa <= 5; tentativa++) {
-try {
-await delay(3000)
+// aguarda o socket iniciar antes de pedir o primeiro código
+await delay(4000)
 
+for (let tentativa = 1; tentativa <= 20; tentativa++) {
 if (tokito.authState?.creds?.registered) return
 
+try {
 const codigo = await tokito.requestPairingCode(numero)
 const formatado = codigo?.match(/.{1,4}/g)?.join('-') || codigo
 
@@ -295,12 +296,18 @@ console.log(colors.cyan(`
 ┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 WhatsApp > Aparelhos conectados
 ┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar aparelho
 ┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar com número de telefone
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ ⏳ O código expira em ~1 min; se expirar, um novo aparece aqui.
 ┕─݊━⵿໋݊─⊣ ( 🧊 ${NomeDoBot} 🧊 ) ⊢─⵿໋݊━⵿໋݊━⵿໋݊─┙
 `))
-return
 } catch(error) {
-console.log(colors.red(`\n❌ Falha ao gerar o código de conexão (tentativa ${tentativa}/5).\n`))
+console.log(colors.red(`\n❌ Falha ao gerar o código de conexão (tentativa ${tentativa}).\n`))
 console.log(error?.message || error)
+}
+
+// espera ~40s antes de gerar um novo código, encerrando cedo se conectar
+for (let i = 0; i < 40; i++) {
+if (tokito.authState?.creds?.registered) return
+await delay(1000)
 }
 }
 }
@@ -406,7 +413,7 @@ const { state, saveCreds } = await useMultiFileAuthState(qrcode)
 const tokito = makeWASocket({
 version: [2, 3000, 1044006379],
 logger,
-browser: ['Linux', 'Opera', '10.0.22631'],
+browser: ['Ubuntu', 'Chrome', '20.0.04'],
 auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
 msgRetryCounterCache: cache,
 mobile: false,
