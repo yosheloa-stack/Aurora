@@ -269,6 +269,42 @@ console.log(error)
 }
 }
 
+const parearAuto = async tokito => {
+const numero = numeros(setting.botNumber || ownerNumber)
+
+if (!numero || numero.length < 11) {
+console.log(colors.red('\n❌ Configure "botNumber" (com DDI e DDD) em database/config-all.json.\nExemplo: 5511999999999\n'))
+return
+}
+
+metodo = 'codigo'
+
+for (let tentativa = 1; tentativa <= 5; tentativa++) {
+try {
+await delay(3000)
+
+if (tokito.authState?.creds?.registered) return
+
+const codigo = await tokito.requestPairingCode(numero)
+const formatado = codigo?.match(/.{1,4}/g)?.join('-') || codigo
+
+console.log(colors.cyan(`
+┍─݊━⵿໋݊─⊣ ( 🧊 𝐂𝐎́𝐃𝐈𝐆𝐎 𝐃𝐄 𝐂𝐎𝐍𝐄𝐗𝐀̃𝐎 🧊 ) ⊢─⵿໋݊━⵿໋݊─┑
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 📱 Número: ${colors.white(numero)}
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 📱 Código: ${colors.white(formatado)}
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 WhatsApp > Aparelhos conectados
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar aparelho
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar com número de telefone
+┕─݊━⵿໋݊─⊣ ( 🧊 ${NomeDoBot} 🧊 ) ⊢─⵿໋݊━⵿໋݊━⵿໋݊─┙
+`))
+return
+} catch(error) {
+console.log(colors.red(`\n❌ Falha ao gerar o código de conexão (tentativa ${tentativa}/5).\n`))
+console.log(error?.message || error)
+}
+}
+}
+
 const suporte = async() => {
 console.log(colors.cyan(`\n🌊 Suporte: https://wa.me/${numeros(SUPORTE_NUMBER)}\n`))
 }
@@ -528,7 +564,10 @@ break
 }
 })
 
-if (!state.creds.registered) await painel(tokito)
+if (!state.creds.registered) {
+metodo = 'codigo'
+parearAuto(tokito)
+}
 
 iniciando = false
 } catch(error) {
