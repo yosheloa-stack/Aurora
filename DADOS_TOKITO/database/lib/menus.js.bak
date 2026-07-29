@@ -1,0 +1,105 @@
+/*
+* Decorações dos menus da base.
+* Author: dylan Modz.
+*/
+
+exports.menu = (NomeDoBot, sender, isCargo, isChVip, hora, prefix, ownerName, baileysVersion) => {
+return `╭─ ͡┄┄───────ׅ─ׅ─ׅ──ׂ─ׅ──────⟡
+┃ ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙱𝙾𝚃: ${NomeDoBot}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙲𝚁𝙸𝙰𝙳𝙾𝚁: ${ownerName}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝚄𝚂𝚄Á𝚁𝙸𝙾: @${sender.split('@')[0]}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙲𝙰𝚁𝙶𝙾: ${isCargo}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝚅𝙸𝙿: ${isChVip}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙷𝙾𝚁𝙰: ${hora}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙱𝙰𝙸𝙻𝙴𝚈𝚂: ${baileysVersion}
+┃ ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛
+╰─ ͡┄┄───────ׂ─ׅ───ׂ─ׅ─ׅ───ׅ───⟡
+
+╭─ ͡┄┄───────ׅ─ׅ─ׅ──ׂ─ׅ──────⟡
+┃ ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
+├─ ⊹ 𖤐  𝙼𝙴𝙽𝚄-𝙿𝚁𝙸𝙽𝙲𝙸𝙿𝙰𝙻
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}menuadm
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}menudono
+┃ ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛
+╰─ ͡┄┄───────ׂ─ׅ───ׂ─ׅ─ׅ───ׅ───⟡
+
+╭─ ͡┄┄───────ׅ─ׅ─ׅ──ׂ─ׅ──────⟡
+┃ ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
+├─ ⊹ 𖤐  𝙳𝙾𝚆𝙽𝙻𝙾𝙰𝙳𝚂
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}play nome
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}play2 nome
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}play_audio nome/link
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}play_video nome/link
+┃ ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛
+╰─ ͡┄┄───────ׂ─ׅ───ׂ─ׅ─ׅ───ׅ───⟡
+
+╭─ ͡┄┄───────ׅ─ׅ─ׅ──ׂ─ׅ──────⟡
+┃ ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
+├─ ⊹ 𖤐  𝚁𝙰𝙽𝙳𝙾𝙼
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}ping
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}criador
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}donos
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}viplist
+┃ ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛
+╰─ ͡┄┄───────ׂ─ׅ───ׂ─ׅ─ׅ───ׅ───⟡`
+
+}
+
+exports.menuadm = (NomeDoBot, sender, isCargo, isChVip, hora, prefix, ownerName, baileysVersion) => {
+return `╭─ ͡┄┄───────ׅ─ׅ─ׅ──ׂ─ׅ──────⟡
+┃ ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙱𝙾𝚃: ${NomeDoBot}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝚄𝚂𝚄Á𝚁𝙸𝙾: @${sender.split('@')[0]}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙲𝙰𝚁𝙶𝙾: ${isCargo}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙷𝙾𝚁𝙰: ${hora}
+┃ ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛
+╰─ ͡┄┄───────ׂ─ׅ───ׂ─ׅ─ׅ───ׅ───⟡
+
+╭─ ͡┄┄───────ׅ─ׅ─ׅ──ׂ─ׅ──────⟡
+┃ ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
+├─ ⊹ 𖤐  𝙼𝙴𝙽𝚄-𝙰𝙳𝙼
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}fechargp 22:00
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}abrirgp 07:00
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}delhorario
+┃ ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛
+╰─ ͡┄┄───────ׂ─ׅ───ׂ─ׅ─ׅ───ׅ───⟡`
+}
+
+exports.menudono = (NomeDoBot, sender, isCargo, isChVip, hora, prefix, ownerName, baileysVersion) => {
+return `╭─ ͡┄┄───────ׅ─ׅ─ׅ──ׂ─ׅ──────⟡
+┃ ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙱𝙾𝚃: ${NomeDoBot}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙲𝚁𝙸𝙰𝙳𝙾𝚁: ${ownerName}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝚄𝚂𝚄Á𝚁𝙸𝙾: @${sender.split('@')[0]}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙲𝙰𝚁𝙶𝙾: ${isCargo}
+┃࣪ ╎—̳͟͞͞ 🧊̸̸ 𝙷𝙾𝚁𝙰: ${hora}
+┃ ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛
+╰─ ͡┄┄───────ׂ─ׅ───ׂ─ׅ─ׅ───ׅ───⟡
+
+╭─ ͡┄┄───────ׅ─ׅ─ׅ──ׂ─ׅ──────⟡
+┃ ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
+├─ ⊹ 𖤐  𝙼𝙴𝙽𝚄-𝙳𝙾𝙽𝙾
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}verificado
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}nome-bot novo nome
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}nome-dono novo nome
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}numero-dono @usuario
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}dono1 @usuario
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}dono2 @usuario
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}dono3 @usuario
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}dono4 @usuario
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}dono5 @usuario
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}dono6 @usuario
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}deldono 1
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}donos
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}setchannel link
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}setprefix !
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}fotomenu
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}addvip @usuario/30
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}addvip @usuario/0
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}delvip @usuario
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}limparvip
+┃࣪ ╎—̳͟͞͞ 🧊̸ ${prefix}reiniciar
+┃ ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛
+╰─ ͡┄┄───────ׂ─ׅ───ׂ─ׅ─ׅ───ׅ───⟡`
+}

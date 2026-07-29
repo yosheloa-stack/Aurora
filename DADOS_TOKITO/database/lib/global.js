@@ -1,0 +1,241 @@
+/*
+* Mensagens globais utilizadas pela base.
+* Author: Yosh.
+*/
+
+
+
+
+exports.onlyOwner = () => {
+return `*🧊 ᴇꜱꜱᴇ ᴄᴏᴍᴀɴᴅᴏ ᴇ́ ᴀᴘᴇɴᴀꜱ ᴘᴀʀᴀ ᴏ ᴍᴇᴜ ᴅᴏɴᴏ ᴜᴛɪʟɪᴢᴀʀ...*`;
+};
+
+exports.commandNotFound = (prefix) => {
+return `*❌ | Comando não encontrado.*\n\n> Digite *${prefix}menu* para ver os comandos.`;
+};
+
+exports.sogrupo = () => `*❌ | ᴇsᴛᴇ ᴄᴏᴍᴀɴᴅᴏ sᴏ ᴘᴏᴅᴇ sᴇʀ ᴜsᴀᴅᴏ ᴇᴍ ɢʀᴜᴘᴏs.*`
+
+exports.soadm = () => `*❌ | ᴀᴘᴇɴᴀs ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀᴇs ᴘᴏᴅᴇᴍ ᴜsᴀʀ ᴇsᴛᴇ ᴄᴏᴍᴀɴᴅᴏ.*`
+
+exports.botadm = () => `*❌ | ᴇᴜ ᴘʀᴇᴄɪsᴏ sᴇʀ ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀ ᴅᴏ ɢʀᴜᴘᴏ.*`
+
+exports.marque = () => `*❌ | ᴍᴀʀǫᴜᴇ ᴏᴜ ʀᴇsᴘᴏɴᴅᴀ ᴀ ᴍᴇɴsᴀɢᴇᴍ ᴅᴏ ᴜsᴜᴀʀɪᴏ.*`
+
+exports.nobot = () => `*❌ | ɴᴀᴏ ᴘᴏssᴏ ᴇxᴇᴄᴜᴛᴀʀ ᴇssᴀ ᴀᴄᴀᴏ ᴄᴏᴍɪɢᴏ ᴍᴇsᴍᴏ.*`
+
+exports.nodono = () => `*❌ | ɴᴀᴏ ᴇ ᴘᴏssɪᴠᴇʟ ᴇxᴇᴄᴜᴛᴀʀ ᴇssᴀ ᴀᴄᴀᴏ ᴄᴏᴍ ᴜᴍ ᴅᴏɴᴏ.*`
+
+exports.jaadm = () => `*❌ | ᴇssᴇ ᴜsᴜᴀʀɪᴏ ᴊᴀ ᴇ ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀ.*`
+
+exports.naoadm = () => `*❌ | ᴇssᴇ ᴜsᴜᴀʀɪᴏ ɴᴀᴏ ᴇ ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀ.*`
+
+exports.banido = alvo => `*✅ | @${alvo.split('@')[0]} ғᴏɪ ʀᴇᴍᴏᴠɪᴅᴏ ᴅᴏ ɢʀᴜᴘᴏ.*`
+
+exports.promovido = alvo => `*✅ | @${alvo.split('@')[0]} ғᴏɪ ᴘʀᴏᴍᴏᴠɪᴅᴏ ᴀ ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀ.*`
+
+exports.rebaixado = alvo => `*✅ | @${alvo.split('@')[0]} ғᴏɪ ʀᴇʙᴀɪxᴀᴅᴏ ᴅᴇ ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀ.*`
+
+exports.falha = () => `*❌ | ɴᴀᴏ ғᴏɪ ᴘᴏssɪᴠᴇʟ ᴇxᴇᴄᴜᴛᴀʀ ᴀ ᴀᴄᴀᴏ.*`
+exports.error = () => {
+return `*❌ | Ocorreu um erro ao executar este comando.*`;
+};
+
+exports.wait = () => {
+return `*⏳ | ᴀɢᴜᴀʀᴅᴇ ᴜᴍ ᴘᴏᴜᴄᴏ, ᴇsᴛᴏᴜ ᴘʀᴏᴄᴇssᴀɴᴅᴏ sᴇᴜ ᴘᴇᴅɪᴅᴏ...*`;
+};
+
+exports.ownerSlotEmpty = () => {
+return `*ɴᴀᴏ ʜᴀ ᴅᴏɴᴏ ᴘᴀʀᴀ ʀᴇᴍᴏᴠᴇʀ 🙇‍♂️*`;
+};
+
+exports.ownerRemoved = (numero) => {
+return `*@${numero} ꜰᴏɪ ʀᴇᴛɪʀᴀᴅᴏ ᴅᴏ ᴛɪᴍᴇ ᴅᴏꜱ ᴅᴏɴᴏꜱ 🙇‍♂️*`;
+};
+
+exports.ownerNumberRequired = () => {
+return `*💫 ᴍᴇɴᴄɪᴏɴᴇ ᴏ ᴜsᴜᴀʀɪᴏ ᴏᴜ ᴅɪɢɪᴛᴇ ᴏ ɴᴜ́ᴍᴇʀᴏ 🙇‍♂️*`;
+};
+
+exports.ownerAdded = (numero) => {
+return `*@${numero} ᴀɢᴏʀᴀ ғᴀᴢ ᴘᴀʀᴛᴇ ᴅᴏ ᴛɪᴍᴇ ᴅᴏꜱ ᴅᴏɴᴏꜱ 🙅‍♂️*`;
+};
+
+exports.ownerSlotRequired = () => {
+return `*💫 ᴅɪɢɪᴛᴇ ᴏ ɴᴜ́ᴍᴇʀᴏ ᴅᴏ ᴅᴏɴᴏ ᴀ ꜱᴇʀ ʀᴇᴍᴏᴠɪᴅᴏ, ᴅᴇ 1 ᴀ 6 🙇‍♂️*`;
+};
+
+exports.ownerSlotInvalid = () => {
+return `*❌ | ɴᴜ́ᴍᴇʀᴏ ɪɴᴠᴀ́ʟɪᴅᴏ. ᴜꜱᴇ ᴅᴇ 1 ᴀ 6.*`;
+};
+
+exports.ownerSlotNotRegistered = (numero) => {
+return `*❌ | ɴᴀ̃ᴏ ʜᴀ ᴅᴏɴᴏ ᴄᴀᴅᴀꜱᴛʀᴀᴅᴏ ɴᴏ ᴇꜱᴘᴀᴄ̧ᴏ ${numero}.*`;
+};
+
+exports.botNameRequired = (prefix) => {
+return `*❌ | ɪɴꜰᴏʀᴍᴇ ᴏ ɴᴏᴠᴏ ɴᴏᴍᴇ.\n\n> ${prefix}nome-bot AURORA BOT*`;
+};
+
+exports.botNameChanged = (nome) => {
+return `*ᴘʀᴏɴᴛᴏ ᴍᴇꜱᴛʀᴇ, ᴀɢᴏʀᴀ ᴍᴇᴜ ɴᴏᴍᴇ ᴇ́ ${nome} 🙇‍♂️*`;
+};
+
+exports.ownerNameRequired = (prefix) => {
+return `*❌ | ɪɴꜰᴏʀᴍᴇ ᴏ ɴᴏᴠᴏ ɴɪᴄᴋ.\n\n> ${prefix}nome-dono Yosh*`;
+};
+
+exports.ownerNameChanged = (nome) => {
+return `*ᴄᴇʀᴛᴏ ꜱᴇɴʜᴏʀ, ᴀɢᴏʀᴀ ᴏ ꜱᴇᴜ ɴɪᴄᴋ ᴇ́ ${nome} 🙅‍♂️*`;
+};
+
+exports.mainOwnerRequired = (prefix) => {
+return `*❌ | ᴍᴀʀǫᴜᴇ ᴏ ɴᴏᴠᴏ ᴅᴏɴᴏ ᴏᴜ ᴅɪɢɪᴛᴇ ᴏ ɴᴜ́ᴍᴇʀᴏ.\n\n> ${prefix}numero-dono 5511999999999*`;
+};
+
+exports.mainOwnerChanged = (numero) => {
+return `*ᴄᴇʀᴛᴏ ᴍᴇꜱᴛʀᴇ, ᴀɢᴏʀᴀ ᴏ @${numero} ꜱᴇʀᴀ́ ᴏ ᴅᴏɴᴏ ᴘʀɪɴᴄɪᴘᴀʟ ᴅᴏ ʙᴏᴛ 🙆‍♂️*`;
+};
+
+exports.channelRequired = (prefix, command) => {
+return `- *ᴇꜱᴛᴀ ꜰᴀʟᴛᴀɴᴅᴏ ᴏ ᴄᴀɴᴀʟ.. 🤷‍♂️*\n> ✨ → *ᴇxᴇᴍᴘʟᴏ: ${prefix + command} <link do canal>*\n> 🚫 → *ᴘᴀʀᴀ ᴅᴇꜱᴀᴛɪᴠᴀʀ ᴜꜱᴇ: ${prefix + command} 0*`;
+};
+
+exports.channelDisabled = () => {
+return `*ᴄʜᴀɴɴᴇʟ ᴅᴇꜱᴀᴛɪᴠᴀᴅᴏ ᴄᴏᴍ ꜱᴜᴄᴇꜱꜱᴏ ꜱᴇɴʜᴏʀ(ᴀ)! 🙇‍♂️*`;
+};
+
+exports.channelEnabled = (jid, link) => {
+return `- *ᴄʜᴀɴɴᴇʟ ᴀᴛɪᴠᴏ ᴄᴏᴍ ꜱᴜᴄᴇꜱꜱᴏ ꜱᴇɴʜᴏʀ(ᴀ) ✨*\n> *🥇 → ɪᴅ: ${jid}*\n> *🖇️ → ʟɪɴᴋ: ${link}*`;
+};
+
+exports.prefixRequired = () => {
+return `*❌ | ɪɴꜰᴏʀᴍᴇ ᴏ ɴᴏᴠᴏ ᴘʀᴇꜰɪxᴏ.*`;
+};
+
+exports.prefixChanged = (prefix) => {
+return `*ᴏᴋᴀʏ ᴍᴇꜱᴛʀᴇ, ᴀɢᴏʀᴀ ᴍᴇᴜ ᴘʀᴇꜰɪxᴏ ᴇ́『 ${prefix} 』🙇‍♂️*`;
+};
+
+exports.menuMediaSaved = (tipo) => {
+return `*${tipo === 'video' ? 'ᴠɪ́ᴅᴇᴏ' : 'ɪᴍᴀɢᴇᴍ'} ꜱᴀʟᴠ${tipo === 'video' ? 'ᴏ' : 'ᴀ'} ʟᴏᴄᴀʟᴍᴇɴᴛᴇ ᴄᴏᴍ ꜱᴜᴄᴇꜱꜱᴏ 🙆‍♂️*`;
+};
+
+exports.menuMediaRequired = () => {
+return `*ᴇɪ ᴍᴇꜱᴛʀᴇ, ᴍᴀʀǫᴜᴇ ᴜᴍᴀ ɪᴍᴀɢᴇᴍ ᴏᴜ ᴠɪ́ᴅᴇᴏ ᴘᴀʀᴀ ᴍᴜᴅᴀʀ ᴏ ᴍᴇɴᴜ 🙇‍♂️*`;
+};
+
+exports.verifiedEnabled = () => {
+return `*ᴀᴛɪᴠᴏᴜ ᴄᴏᴍ ꜱᴜᴄᴇꜱꜱᴏ ᴏ ᴠᴇʀɪꜰɪᴄᴀᴅᴏ ɢʟᴏʙᴀʟ, ᴏ ꜱᴇʟᴏ ꜰᴏɪ ᴀᴅɪᴄɪᴏɴᴀᴅᴏ ᴇᴍ ᴛᴏᴅᴏꜱ ᴏꜱ ᴄᴏᴍᴀɴᴅᴏꜱ. 🧊*`;
+};
+
+exports.verifiedDisabled = () => {
+return `*ᴅᴇꜱᴀᴛɪᴠᴏᴜ ᴄᴏᴍ ꜱᴜᴄᴇꜱꜱᴏ ᴏ ᴠᴇʀɪꜰɪᴄᴀᴅᴏ ɢʟᴏʙᴀʟ, ᴏ ꜱᴇʟᴏ ꜰᴏɪ ʀᴇᴛɪʀᴀᴅᴏ ᴅᴇ ᴛᴏᴅᴏꜱ ᴏꜱ ᴄᴏᴍᴀɴᴅᴏꜱ. 🧊*`;
+};
+
+exports.reloadSuccess = (arquivo) => {
+return `Alterações salvas, aguarde que estou carregando :) - '${arquivo}'`;
+};
+
+exports.reloadError = (arquivo) => {
+return `Não foi possível carregar as alterações de '${arquivo}'.`;
+};
+
+exports.grupo = () => {
+return `*❌ | ᴇsᴛᴇ ᴄᴏᴍᴀɴᴅᴏ sᴏ ᴘᴏᴅᴇ sᴇʀ ᴜsᴀᴅᴏ ᴇᴍ ɢʀᴜᴘᴏs.*`;
+};
+
+exports.adm = () => {
+return `*❌ | ᴀᴘᴇɴᴀs ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀᴇs ᴘᴏᴅᴇᴍ ᴜsᴀʀ ᴇsᴛᴇ ᴄᴏᴍᴀɴᴅᴏ.*`;
+};
+
+exports.botadm = () => {
+return `*❌ | ᴇᴜ ᴘʀᴇᴄɪsᴏ sᴇʀ ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀ ᴅᴏ ɢʀᴜᴘᴏ.*`;
+};
+
+exports.fechar = (prefix, hora) => {
+if (hora) return `*✅ | ɢʀᴜᴘᴏ ᴘʀᴏɢʀᴀᴍᴀᴅᴏ ᴘᴀʀᴀ ғᴇᴄʜᴀʀ ᴀs ${hora}.*`;
+return `*🔒 | ᴜsᴇ: ${prefix}fechargp 22:00*\n\n> *ᴘᴏᴅᴇ ᴍᴀʀᴄᴀʀ ᴜᴍᴀ ɪᴍᴀɢᴇᴍ ᴏᴜ ᴠɪᴅᴇᴏ.*`;
+};
+
+exports.abrir = (prefix, hora) => {
+if (hora) return `*✅ | ɢʀᴜᴘᴏ ᴘʀᴏɢʀᴀᴍᴀᴅᴏ ᴘᴀʀᴀ ᴀʙʀɪʀ ᴀs ${hora}.*`;
+return `*🔓 | ᴜsᴇ: ${prefix}abrirgp 07:00*\n\n> *ᴘᴏᴅᴇ ᴍᴀʀᴄᴀʀ ᴜᴍᴀ ɪᴍᴀɢᴇᴍ ᴏᴜ ᴠɪᴅᴇᴏ.*`;
+};
+
+exports.fechado = (hora, grupo) => {
+return `*🔒 | ɢʀᴜᴘᴏ ғᴇᴄʜᴀᴅᴏ!*\n\n*👥 | ${grupo}*\n*🕒 | ${hora}*`;
+};
+
+exports.aberto = (hora, grupo) => {
+return `*🔓 | ɢʀᴜᴘᴏ ᴀʙᴇʀᴛᴏ!*\n\n*👥 | ${grupo}*\n*🕒 | ${hora}*`;
+};
+exports.sogrupo = () => {
+return `*❌ | ᴇsᴛᴇ ᴄᴏᴍᴀɴᴅᴏ sᴏ ᴘᴏᴅᴇ sᴇʀ ᴜsᴀᴅᴏ ᴇᴍ ɢʀᴜᴘᴏs.*`
+}
+
+exports.soadm = () => {
+return `*❌ | ᴀᴘᴇɴᴀs ᴀᴅᴍɪɴɪsᴛʀᴀᴅᴏʀᴇs ᴘᴏᴅᴇᴍ ᴜsᴀʀ ᴇsᴛᴇ ᴄᴏᴍᴀɴᴅᴏ.*`
+}
+
+exports.semhorario = () => {
+return `*❌ | ɴᴀᴏ ᴇxɪsᴛᴇ ɴᴇɴʜᴜᴍ ʜᴏʀᴀʀɪᴏ ᴘʀᴏɢʀᴀᴍᴀᴅᴏ ɴᴇsᴛᴇ ɢʀᴜᴘᴏ.*`
+}
+
+exports.apagado = () => {
+return `*✅ | ᴏs ʜᴏʀᴀʀɪᴏs ᴅᴇ ᴀʙᴇʀᴛᴜʀᴀ ᴇ ғᴇᴄʜᴀᴍᴇɴᴛᴏ ғᴏʀᴀᴍ ʀᴇᴍᴏᴠɪᴅᴏs.*`
+}
+
+exports.falha = () => {
+return `*❌ | ɴᴀᴏ ғᴏɪ ᴘᴏssɪᴠᴇʟ ʀᴇᴍᴏᴠᴇʀ ᴏs ʜᴏʀᴀʀɪᴏs.*`
+}
+
+exports.donos = (nome, principal, extras = []) => {
+let texto = `*👑 | ᴛɪᴍᴇ ᴅᴏs ᴅᴏɴᴏs*
+
+*🥇 | ᴅᴏɴᴏ ᴘʀɪɴᴄɪᴘᴀʟ*
+${principal
+? `• ɴᴏᴍᴇ: ${nome}\n• ɴᴜᴍᴇʀᴏ: @${principal}`
+: '• ɴᴀᴏ ᴄᴀᴅᴀsᴛʀᴀᴅᴏ'}`
+
+if (extras.length > 0) {
+texto += `\n\n*👥 | ᴅᴏɴᴏs ᴀᴅɪᴄɪᴏɴᴀɪs*\n\n`
+
+texto += extras
+.map(dono => `*${dono.slot}.* @${dono.numero}`)
+.join('\n')
+} else {
+texto += `\n\n*👥 | ᴅᴏɴᴏs ᴀᴅɪᴄɪᴏɴᴀɪs*\n\n• ɴᴇɴʜᴜᴍ ᴅᴏɴᴏ ᴀᴅɪᴄɪᴏɴᴀʟ ᴄᴀᴅᴀsᴛʀᴀᴅᴏ.`
+}
+
+return texto
+}
+
+
+exports.bemvindo = ativo => ativo ? `*✅ | ʙᴇᴍ-ᴠɪɴᴅᴏ ᴀᴛɪᴠᴀᴅᴏ.*` : `*❌ | ʙᴇᴍ-ᴠɪɴᴅᴏ ᴅᴇsᴀᴛɪᴠᴀᴅᴏ.*`
+
+exports.tags = (prefix, comando) => `*❌ | ɪɴғᴏʀᴍᴇ ᴀ ʟᴇɢᴇɴᴅᴀ.*
+
+*📌 | ᴇxᴇᴍᴘʟᴏ:*
+> ${prefix}${comando} ʙᴇᴍ-ᴠɪɴᴅᴏ #numero# ᴀᴏ #nomegrupo#
+
+*🏷️ | ᴛᴀɢs:*
+#numero#
+#numerodele#
+#nomegrupo#
+#nomedogp#
+#prefixo#
+#nomedobot#
+#hora#
+#dia#
+#data#
+#ano#
+#year#
+#yeah#
+#estado#
+#membros#`
+
+exports.legenda = tipo => `*✅ | ʟᴇɢᴇɴᴅᴀ ᴅᴇ ${tipo} ᴀʟᴛᴇʀᴀᴅᴀ.*`
+exports.midia = () => `*❌ | ᴍᴀʀǫᴜᴇ ᴜᴍᴀ ɪᴍᴀɢᴇᴍ ᴏᴜ ᴜᴍ ᴠɪᴅᴇᴏ.*`
+exports.fundo = tipo => `*✅ | ғᴜɴᴅᴏ ᴅᴇ ${tipo} sᴀʟᴠᴏ.*`
+exports.fundos = () => `*✅ | ғᴜɴᴅᴏs ᴅᴇ ᴇɴᴛʀᴀᴅᴀ ᴇ sᴀɪᴅᴀ ʀᴇᴍᴏᴠɪᴅᴏs.*`
