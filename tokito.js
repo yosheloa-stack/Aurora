@@ -10,6 +10,14 @@ const { getContentType, jidNormalizedUser, proto, prepareWAMessageMedia, generat
 
 const { NomeDoBot, ownerName, prefix, channel, channeldl, API_URL, API_KEY_TOKITO, ownerNumber, CREDENTIALS_USER } = setting
 
+// Caminho do ffmpeg: usa o binario estatico (ffmpeg-static) quando disponivel
+// e cai pro ffmpeg do sistema caso contrario.
+let ffmpegBin = 'ffmpeg'
+try {
+const bin = require('ffmpeg-static')
+if (bin && fs.existsSync(bin)) ffmpegBin = bin
+} catch {}
+
 
 if (!fs.existsSync(path.dirname(arquivo))) fs.mkdirSync(path.dirname(arquivo), { recursive: true })
 if (!fs.existsSync(pasta)) fs.mkdirSync(pasta, { recursive: true })
@@ -2115,8 +2123,8 @@ const buffer = await getFileBuffer(video || imagem, video ? 'video' : 'image')
 fs.writeFileSync(entrada, buffer)
 
 const cmd = video
-? `ffmpeg -i "${entrada}" -vcodec libwebp -filter:v fps=fps=15 -lossless 0 -compression_level 6 -q:v 50 -loop 0 -preset default -an -vsync 0 -s 512:512 "${saida}"`
-: `ffmpeg -i "${entrada}" -vcodec libwebp -filter:v scale=512:512:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:-1:-1:color=#00000000 -lossless 1 -q:v 100 "${saida}"`
+? `"${ffmpegBin}" -i "${entrada}" -vcodec libwebp -filter:v fps=fps=15 -lossless 0 -compression_level 6 -q:v 50 -loop 0 -preset default -an -vsync 0 -s 512:512 "${saida}"`
+: `"${ffmpegBin}" -i "${entrada}" -vcodec libwebp -filter:v scale=512:512:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:-1:-1:color=#00000000 -lossless 1 -q:v 100 "${saida}"`
 
 exec(cmd, async (err) => {
 try {
