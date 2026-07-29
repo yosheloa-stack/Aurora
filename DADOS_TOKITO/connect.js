@@ -404,7 +404,7 @@ const { version } = await fetchLatestBaileysVersion()
 const { state, saveCreds } = await useMultiFileAuthState(qrcode)
 
 const tokito = makeWASocket({
-version: [2, 3000, 1042650569],
+version: [2, 3000, 1044006379],
 logger,
 browser: ['Linux', 'Opera', '10.0.22631'],
 auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },

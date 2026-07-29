@@ -38,7 +38,7 @@ gradient: ['magenta', 'magenta']
 const banner3 = cfonts.render('AURORA|BASE', {
 font: 'block',
 align: 'center',
-gradient: ['magenta', 'magentaBright']
+gradient: ['magenta', '#ff5fff']
 })
 const { default: makeWASocket, downloadContentFromMessage, fetchLatestBaileysVersion, useMultiFileAuthState, makeInMemoryStore, DisconnectReason, relayWAMessage, mentionedJid, processTime, MediaType, Browser, MessageType, Presence, Mimetype, Browsers, delay, getLastMessageInChat, downloadMediaMessage, generateWAMessageFromContent, proto, prepareWAMessageMedia, jidNormalizedUser, getContentType, makeCacheableSignalKeyStore } = baileys
 
