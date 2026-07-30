@@ -296,7 +296,7 @@ console.log(colors.cyan(`
 ┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 WhatsApp > Aparelhos conectados
 ┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar aparelho
 ┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar com número de telefone
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ ⏳ O código expira em ~1 min; se expirar, um novo aparece aqui.
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ ⚠️ USE SEMPRE O CÓDIGO MAIS RECENTE. Ao aparecer um novo, o anterior deixa de valer.
 ┕─݊━⵿໋݊─⊣ ( 🧊 ${NomeDoBot} 🧊 ) ⊢─⵿໋݊━⵿໋݊━⵿໋݊─┙
 `))
 } catch(error) {
@@ -304,8 +304,8 @@ console.log(colors.red(`\n❌ Falha ao gerar o código de conexão (tentativa ${
 console.log(error?.message || error)
 }
 
-// espera ~40s antes de gerar um novo código, encerrando cedo se conectar
-for (let i = 0; i < 40; i++) {
+// mantem o mesmo código válido por ~2,5 min antes de gerar outro (encerra cedo se conectar)
+for (let i = 0; i < 150; i++) {
 if (tokito.authState?.creds?.registered) return
 await delay(1000)
 }
