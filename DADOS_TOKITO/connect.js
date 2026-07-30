@@ -269,63 +269,6 @@ console.log(error)
 }
 }
 
-const registrado = () => Boolean(global.tokito?.authState?.creds?.registered)
-
-const parearAuto = async () => {
-// Um unico gerador de codigo por processo. Reconexoes NAO iniciam outro,
-// evitando gerar codigos novos a cada queda (o que invalidava o anterior).
-if (global.pareamentoRodando) return
-global.pareamentoRodando = true
-
-try {
-const numero = numeros(setting.botNumber || ownerNumber)
-
-if (!numero || numero.length < 11) {
-console.log(colors.red('\n❌ Configure "botNumber" (com DDI e DDD) em database/config-all.json.\nExemplo: 5511999999999\n'))
-return
-}
-
-metodo = 'codigo'
-
-// aguarda o socket iniciar antes de pedir o primeiro código
-await delay(4000)
-
-for (let tentativa = 1; tentativa <= 30; tentativa++) {
-if (registrado()) return
-
-const sock = global.tokito
-if (!sock) { await delay(2000); continue }
-
-try {
-const codigo = await sock.requestPairingCode(numero)
-const formatado = codigo?.match(/.{1,4}/g)?.join('-') || codigo
-
-console.log(colors.cyan(`
-┍─݊━⵿໋݊─⊣ ( 🧊 𝐂𝐎́𝐃𝐈𝐆𝐎 𝐃𝐄 𝐂𝐎𝐍𝐄𝐗𝐀̃𝐎 🧊 ) ⊢─⵿໋݊━⵿໋݊─┑
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 📱 Número: ${colors.white(numero)}
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 📱 Código: ${colors.white(formatado)}
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 WhatsApp > Aparelhos conectados
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar aparelho
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar com número de telefone
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ ⚠️ USE SEMPRE O CÓDIGO MAIS RECENTE. Ao aparecer um novo, o anterior deixa de valer.
-┕─݊━⵿໋݊─⊣ ( 🧊 ${NomeDoBot} 🧊 ) ⊢─⵿໋݊━⵿໋݊━⵿໋݊─┙
-`))
-} catch(error) {
-console.log(colors.red(`\n❌ Falha ao gerar o código de conexão (tentativa ${tentativa}).\n`))
-console.log(error?.message || error)
-}
-
-// mantem o mesmo código válido por ~2,5 min antes de gerar outro (encerra cedo se conectar)
-for (let i = 0; i < 150; i++) {
-if (registrado()) return
-await delay(1000)
-}
-}
-} finally {
-global.pareamentoRodando = false
-}
-}
-
 const suporte = async() => {
 console.log(colors.cyan(`\n🌊 Suporte: https://wa.me/${numeros(SUPORTE_NUMBER)}\n`))
 }
@@ -421,22 +364,11 @@ if (iniciando) return
 iniciando = true
 
 try {
-// Usa a versão mais recente do WhatsApp Web automaticamente; se a busca
-// falhar, cai na versão fixa. Uma versão fixa desatualizada pode ser
-// recusada pelo servidor (401 loggedOut logo na conexão) em alguns ambientes.
-let version = [2, 3000, 1044006379]
-try {
-const info = await fetchLatestBaileysVersion()
-if (Array.isArray(info?.version)) version = info.version
-console.log(colors.cyan(`🧊 Versão do WhatsApp Web: ${version.join('.')}`))
-} catch {
-console.log(colors.yellow('⚠️ Não foi possível buscar a versão automática; usando a fixa.'))
-}
-
+const { version } = await fetchLatestBaileysVersion()
 const { state, saveCreds } = await useMultiFileAuthState(qrcode)
 
 const tokito = makeWASocket({
-version,
+version: [2, 3000, 1042650569],
 logger,
 browser: ['Linux', 'Opera', '10.0.22631'],
 auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
@@ -575,17 +507,7 @@ const causa = motivo(codigo)
 console.log(colors.red(`\n❌ Conexão fechada | Código: ${codigo} | Motivo: ${causa}\n`))
 
 if (codigo === DisconnectReason.loggedOut || codigo === 401) {
-// Se ainda nao registrou (falha durante o pareamento), limpa a sessao
-// automaticamente para o proximo boot tentar um pareamento limpo.
-try {
-if (!state.creds.registered) {
-fs.rmSync(qrcode, { recursive: true, force: true })
-fs.mkdirSync(qrcode, { recursive: true })
-console.log(colors.yellow('🧹 Sessão de pareamento limpa. Reiniciando para um novo código...'))
-} else {
 console.log(colors.red('❌ Sessão encerrada. Apague DADOS_TOKITO/database/qrcode e conecte novamente.'))
-}
-} catch {}
 process.exit(0)
 }
 
@@ -606,10 +528,7 @@ break
 }
 })
 
-if (!state.creds.registered) {
-metodo = 'codigo'
-parearAuto()
-}
+if (!state.creds.registered) await painel(tokito)
 
 iniciando = false
 } catch(error) {
