@@ -438,7 +438,7 @@ const { state, saveCreds } = await useMultiFileAuthState(qrcode)
 const tokito = makeWASocket({
 version,
 logger,
-browser: ['Ubuntu', 'Chrome', '20.0.04'],
+browser: ['Linux', 'Opera', '10.0.22631'],
 auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
 msgRetryCounterCache: cache,
 mobile: false,
