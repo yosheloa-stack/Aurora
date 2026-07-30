@@ -456,7 +456,7 @@ emitOwnEvents: false,
 shouldSyncHistoryMessage: () => false,
 getMessage: async key => {
 const mensagem = global.messageStore?.[key?.id]
-return mensagem?.message || undefined
+return mensagem?.message || { conversation: NomeDoBot }
 }
 })
 
