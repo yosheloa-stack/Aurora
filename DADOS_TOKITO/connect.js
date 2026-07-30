@@ -421,11 +421,22 @@ if (iniciando) return
 iniciando = true
 
 try {
-const { version } = await fetchLatestBaileysVersion()
+// Usa a versão mais recente do WhatsApp Web automaticamente; se a busca
+// falhar, cai na versão fixa. Uma versão fixa desatualizada pode ser
+// recusada pelo servidor (401 loggedOut logo na conexão) em alguns ambientes.
+let version = [2, 3000, 1044006379]
+try {
+const info = await fetchLatestBaileysVersion()
+if (Array.isArray(info?.version)) version = info.version
+console.log(colors.cyan(`🧊 Versão do WhatsApp Web: ${version.join('.')}`))
+} catch {
+console.log(colors.yellow('⚠️ Não foi possível buscar a versão automática; usando a fixa.'))
+}
+
 const { state, saveCreds } = await useMultiFileAuthState(qrcode)
 
 const tokito = makeWASocket({
-version: [2, 3000, 1044006379],
+version,
 logger,
 browser: ['Ubuntu', 'Chrome', '20.0.04'],
 auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
