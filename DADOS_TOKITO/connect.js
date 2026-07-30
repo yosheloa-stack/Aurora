@@ -1,22 +1,23 @@
-/* 
+/*
 * Não utilize o nome original do bot.
 * Utilize com respeito e responsabilidade.
-* Author: Yosh.
+* Author: dylan Modz.
 * Site api pra funcionar os downloads: https://tokito-apis.com.br
 */
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, delay } = require('@whiskeysockets/baileys')
-const { fs, path, util, NodeCache, colors, pino, readline, Boom, estado, banner2, banner3 } = require('./database/lib/exports.js')
-const setting = require('./database/config-all.json'), qrterminal = require('qrcode-terminal')
+const { fs, path, util, NodeCache, colors, pino, Boom, estado, banner2, banner3 } = require('./database/lib/exports.js')
+const setting = require('./database/config-all.json')
 
-const NomeDoBot = setting.NomeDoBot, prefix = setting.prefix, ownerNumber = setting.ownerNumber, VERSAO = setting.VERSAO || '1.0.0', SUPORTE_NUMBER = setting.SUPORTE_NUMBER || ownerNumber
-const qrcode = path.join(__dirname, 'database', 'qrcode'), handler = require.resolve('../tokito.js'), logger = pino({ level: 'silent' })
+const NomeDoBot = setting.NomeDoBot, prefix = setting.prefix, ownerNumber = setting.ownerNumber, VERSAO = setting.VERSAO || '1.0.0'
+const NUMERO_CONEXAO = '12636664220' // DDI + DDD + número, sem +, espaços ou traços
+
+const sessao = path.join(__dirname, 'database', 'qrcode'), handler = require.resolve('../tokito.js'), logger = pino({ level: 'silent' })
 const cache = new NodeCache(), fotos = new NodeCache({ stdTTL: 1800, checkperiod: 60 })
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout }), pergunta = texto => new Promise(resolve => rl.question(texto, resolve))
 
-let tokitojs = require(handler), iniciando = false, reconectando = false, metodo = null, ultimoqr = null
+let tokitojs = require(handler), iniciando = false, reconectando = false, codigoGerado = false
 
-if (!fs.existsSync(qrcode)) fs.mkdirSync(qrcode, { recursive: true })
+if (!fs.existsSync(sessao)) fs.mkdirSync(sessao, { recursive: true })
 
 const grupos = path.join(__dirname, 'database', 'grupos', 'ATIVAÇÕES-TOKITO')
 if (!fs.existsSync(grupos)) fs.mkdirSync(grupos, { recursive: true })
@@ -72,11 +73,7 @@ item?.jid === jid ||
 item?.participant === jid
 )
 
-jid =
-achou?.phoneNumber ||
-achou?.participantAlt ||
-achou?.jid ||
-jid
+jid = achou?.phoneNumber || achou?.participantAlt || achou?.jid || jid
 }
 
 return normalizar(jid)
@@ -113,8 +110,7 @@ return texto
 
 const boasvindas = async(tokito, grupo, usuario, config, entrou, texto) => {
 const contexto = { mentionedJid: usuario ? [usuario] : [] }
-const campo = entrou ? 'fundobv' : 'fundosaiu'
-const fundo = config?.[campo], tipo = config?.[`${campo}_tipo`]
+const campo = entrou ? 'fundobv' : 'fundosaiu', fundo = config?.[campo], tipo = config?.[`${campo}_tipo`]
 
 if (fundo && tipo) {
 const buffer = Buffer.from(fundo, 'base64')
@@ -159,13 +155,10 @@ const grupo = item?.id, acao = item?.action
 if (!grupo?.endsWith('@g.us')) continue
 if (!['add', 'remove'].includes(acao)) continue
 
-const dataGp = lergrupo(grupo)
-const config = dataGp?.[0]?.wellcome?.[0]
-
+const dataGp = lergrupo(grupo), config = dataGp?.[0]?.wellcome?.[0]
 if (!config?.bemvindo1) continue
 
-const metadata = await tokito.groupMetadata(grupo)
-const membros = metadata?.participants || [], total = membros.length
+const metadata = await tokito.groupMetadata(grupo), membros = metadata?.participants || [], total = membros.length
 
 let cfg = setting
 
@@ -208,9 +201,7 @@ console.log(colors.red('❌ Erro no bem-vindo:'), error?.message || error)
 }
 }
 
-const motivo = codigo => {
-return Object.keys(DisconnectReason).find(chave => DisconnectReason[chave] === codigo) || 'desconhecido'
-}
+const motivo = codigo => Object.keys(DisconnectReason).find(chave => DisconnectReason[chave] === codigo) || 'desconhecido'
 
 const erro = console.error, aviso = console.warn, info = console.info
 
@@ -243,72 +234,43 @@ if (bloqueados.some(texto => mensagem.includes(texto))) return
 info.apply(console, arguments)
 }
 
-const parear = async tokito => {
-const telefone = await pergunta(colors.cyan('\nDigite o número do WhatsApp que deseja conectar ↴\n--> '))
-const numero = numeros(telefone)
+const gerarCodigoConexao = async tokito => {
+if (codigoGerado) return
+
+const numero = numeros(NUMERO_CONEXAO)
 
 if (!numero || numero.length < 11) {
-console.log(colors.red('\nNúmero inválido. Digite com DDI e DDD.\nExemplo: 5511999999999\n'))
-return parear(tokito)
+console.log(colors.red(`
+❌ Número inválido no connect.js.
+
+Coloque o número com DDI + DDD + número.
+
+Exemplo:
+const NUMERO_CONEXAO = '5511999999999'
+`))
+
+return
 }
 
 try {
+await delay(1500)
+
 const codigo = await tokito.requestPairingCode(numero)
+codigoGerado = true
 
 console.log(colors.cyan(`
-┍─݊━⵿໋݊─⊣ ( 🧊 𝐂𝐎́𝐃𝐈𝐆𝐎 𝐃𝐄 𝐂𝐎𝐍𝐄𝐗𝐀̃𝐎 🧊 ) ⊢─⵿໋݊━⵿໋݊─┑
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 📱 Código: ${colors.white(codigo)}
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 WhatsApp > Aparelhos conectados
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar aparelho
-┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar com número de telefone
-┕─݊━⵿໋݊─⊣ ( 🧊 ${NomeDoBot} 🧊 ) ⊢─⵿໋݊━⵿໋݊━⵿໋݊─┙
+┍─݊━⵿໋݊─⊣ ( 🧊 𝐂𝐎́𝐃𝐈𝐆𝐎 𝐃𝐄 𝐂𝐎𝐍𝐄𝐗𝐀̃𝐎 🧊 ) ⊢─⵿໋݊━⵿໋݊─┑
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 📱 Número: +${numero}
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🔑 Código: ${colors.white(codigo)}
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 WhatsApp > Aparelhos conectados
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar aparelho
+┃ 𖤐𝆺𝅥˚ —̳͟͞͞ 🧊 Conectar com número de telefone
+┕─݊━⵿໋݊─⊣ ( 🧊 ${NomeDoBot} 🧊 ) ⊢─⵿໋݊━⵿໋݊━⵿໋݊─┙
 `))
 } catch(error) {
+codigoGerado = false
 console.log(colors.red('\n❌ Não foi possível gerar o código de conexão.\n'))
-console.log(error)
-}
-}
-
-const suporte = async() => {
-console.log(colors.cyan(`\n🌊 Suporte: https://wa.me/${numeros(SUPORTE_NUMBER)}\n`))
-}
-
-const painel = async tokito => {
-console.log(colors.cyan(`
-❪🧊.ꯧ𝙿𝙰𝙸𝙽𝙴𝙻 𝙳𝙴 𝙲𝙾𝙽𝚃𝚁𝙾𝙻𝙴ꯧ⸼🧊❫
-┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
-├̟⊹ 📱 〔 1 〕 ➢ Código de conexão
-├̟⊹ 🧊 〔 2 〕 ➢ QR-Code WhatsApp
-├̟⊹ 🌊 〔 3 〕 ➢ Suporte / Ajuda
-┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛
-`))
-
-const opcao = String(await pergunta(colors.white('╰━━➤ ')) || '').trim()
-
-switch(opcao) {
-case '1':
-metodo = 'codigo'
-await parear(tokito)
-break
-
-case '2':
-metodo = 'qr'
-console.log(colors.cyan('\n📱 Preparando o QR-Code para conexão...\n'))
-
-if (ultimoqr) {
-qrterminal.generate(ultimoqr, { small: true })
-console.log(colors.yellow('\nAbra o WhatsApp > Aparelhos conectados > Conectar aparelho.\n'))
-}
-break
-
-case '3':
-await suporte()
-await delay(2000)
-return painel(tokito)
-
-default:
-console.log(colors.red('\n❌ Opção inválida.\n'))
-return painel(tokito)
+console.log(error?.message || error)
 }
 }
 
@@ -364,14 +326,16 @@ if (iniciando) return
 iniciando = true
 
 try {
-const { version } = await fetchLatestBaileysVersion()
-const { state, saveCreds } = await useMultiFileAuthState(qrcode)
+const { version } = await fetchLatestBaileysVersion(), { state, saveCreds } = await useMultiFileAuthState(sessao)
 
 const tokito = makeWASocket({
-version: [2, 3000, 1042650569],
+version,
 logger,
 browser: ['Linux', 'Opera', '10.0.22631'],
-auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
+auth: {
+creds: state.creds,
+keys: makeCacheableSignalKeyStore(state.keys, logger)
+},
 msgRetryCounterCache: cache,
 mobile: false,
 fireInitQueries: true,
@@ -393,8 +357,6 @@ return mensagem?.message || { conversation: NomeDoBot }
 })
 
 global.tokito = tokito
-global.qrTokitoAtual = null
-global.mostrarQrTokito = false
 
 global.fotobv = async(jid, fallback = 'https://telegra.ph/file/24fa902ead26340f3df2c.png') => {
 try {
@@ -467,18 +429,7 @@ console.log(error)
 if (eventos['creds.update']) await saveCreds()
 
 if (eventos['connection.update']) {
-const { connection, lastDisconnect, qr } = eventos['connection.update']
-
-if (qr) {
-ultimoqr = qr
-global.qrTokitoAtual = qr
-
-if (metodo === 'qr' && !state.creds.registered) {
-console.log(colors.cyan('\n📱 ESCANEIE O QR-CODE PARA CONECTAR O BOT:\n'))
-qrterminal.generate(qr, { small: true })
-console.log(colors.yellow('\nAbra o WhatsApp > Aparelhos conectados > Conectar aparelho.\n'))
-}
-}
+const { connection, lastDisconnect } = eventos['connection.update']
 
 switch(connection) {
 case 'connecting':
@@ -487,9 +438,11 @@ break
 
 case 'open': {
 global.startTime = Math.floor(Date.now() / 1000)
-reconectando = false, metodo = null, ultimoqr = null, global.qrTokitoAtual = null, global.mostrarQrTokito = false
-console.log(banner3?.string || colors.magenta('\nAURORA BASE\n'))
-console.log(banner2?.string || colors.magenta('Yosh'))
+reconectando = false
+codigoGerado = true
+
+console.log(banner3?.string || colors.cyan('\nTOKITO BASE\n'))
+console.log(banner2?.string || colors.blue('dylan Modz'))
 console.log(colors.green(`\n✅ ${NomeDoBot} conectado com sucesso!\n`))
 
 try {
@@ -507,13 +460,15 @@ const causa = motivo(codigo)
 console.log(colors.red(`\n❌ Conexão fechada | Código: ${codigo} | Motivo: ${causa}\n`))
 
 if (codigo === DisconnectReason.loggedOut || codigo === 401) {
-console.log(colors.red('❌ Sessão encerrada. Apague DADOS_TOKITO/database/qrcode e conecte novamente.'))
+console.log(colors.red('❌ Sessão encerrada. Apague a pasta database/qrcode e conecte novamente.'))
 process.exit(0)
 }
 
 if (reconectando) return
 
 reconectando = true
+codigoGerado = false
+
 console.log(colors.yellow('⚠️ Reconectando o bot em 5 segundos...'))
 
 setTimeout(() => {
@@ -528,7 +483,7 @@ break
 }
 })
 
-if (!state.creds.registered) await painel(tokito)
+if (!state.creds.registered) await gerarCodigoConexao(tokito)
 
 iniciando = false
 } catch(error) {
@@ -536,6 +491,7 @@ console.log(colors.red('\n❌ Ocorreu um erro ao iniciar a conexão.\n'))
 console.log(error)
 
 setTimeout(() => {
+codigoGerado = false
 iniciando = false
 conectar()
 }, 5000)
