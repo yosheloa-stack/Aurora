@@ -269,7 +269,15 @@ console.log(error)
 }
 }
 
-const parearAuto = async tokito => {
+const registrado = () => Boolean(global.tokito?.authState?.creds?.registered)
+
+const parearAuto = async () => {
+// Um unico gerador de codigo por processo. Reconexoes NAO iniciam outro,
+// evitando gerar codigos novos a cada queda (o que invalidava o anterior).
+if (global.pareamentoRodando) return
+global.pareamentoRodando = true
+
+try {
 const numero = numeros(setting.botNumber || ownerNumber)
 
 if (!numero || numero.length < 11) {
@@ -282,11 +290,14 @@ metodo = 'codigo'
 // aguarda o socket iniciar antes de pedir o primeiro código
 await delay(4000)
 
-for (let tentativa = 1; tentativa <= 20; tentativa++) {
-if (tokito.authState?.creds?.registered) return
+for (let tentativa = 1; tentativa <= 30; tentativa++) {
+if (registrado()) return
+
+const sock = global.tokito
+if (!sock) { await delay(2000); continue }
 
 try {
-const codigo = await tokito.requestPairingCode(numero)
+const codigo = await sock.requestPairingCode(numero)
 const formatado = codigo?.match(/.{1,4}/g)?.join('-') || codigo
 
 console.log(colors.cyan(`
@@ -306,9 +317,12 @@ console.log(error?.message || error)
 
 // mantem o mesmo código válido por ~2,5 min antes de gerar outro (encerra cedo se conectar)
 for (let i = 0; i < 150; i++) {
-if (tokito.authState?.creds?.registered) return
+if (registrado()) return
 await delay(1000)
 }
+}
+} finally {
+global.pareamentoRodando = false
 }
 }
 
@@ -550,7 +564,17 @@ const causa = motivo(codigo)
 console.log(colors.red(`\n❌ Conexão fechada | Código: ${codigo} | Motivo: ${causa}\n`))
 
 if (codigo === DisconnectReason.loggedOut || codigo === 401) {
+// Se ainda nao registrou (falha durante o pareamento), limpa a sessao
+// automaticamente para o proximo boot tentar um pareamento limpo.
+try {
+if (!state.creds.registered) {
+fs.rmSync(qrcode, { recursive: true, force: true })
+fs.mkdirSync(qrcode, { recursive: true })
+console.log(colors.yellow('🧹 Sessão de pareamento limpa. Reiniciando para um novo código...'))
+} else {
 console.log(colors.red('❌ Sessão encerrada. Apague DADOS_TOKITO/database/qrcode e conecte novamente.'))
+}
+} catch {}
 process.exit(0)
 }
 
@@ -573,7 +597,7 @@ break
 
 if (!state.creds.registered) {
 metodo = 'codigo'
-parearAuto(tokito)
+parearAuto()
 }
 
 iniciando = false
