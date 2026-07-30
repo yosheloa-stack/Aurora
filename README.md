@@ -4,7 +4,7 @@ Bot de WhatsApp baseado em [Baileys](https://github.com/WhiskeySockets/Baileys).
 
 ## Requisitos
 
-- Node.js 18+
+- Node.js 20
 - npm
 
 ## Instalação
