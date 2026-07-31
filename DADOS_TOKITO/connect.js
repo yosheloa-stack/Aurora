@@ -1,23 +1,22 @@
 /*
 * Não utilize o nome original do bot.
 * Utilize com respeito e responsabilidade.
-* Author: dylan Modz.
+* Author: Yosh.
 * Site api pra funcionar os downloads: https://tokito-apis.com.br
 */
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, delay } = require('@whiskeysockets/baileys')
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore, delay } = require('@whiskeysockets/baileys')
 const { fs, path, util, NodeCache, colors, pino, Boom, estado, banner2, banner3 } = require('./database/lib/exports.js')
 const setting = require('./database/config-all.json')
 
 const NomeDoBot = setting.NomeDoBot, prefix = setting.prefix, ownerNumber = setting.ownerNumber, VERSAO = setting.VERSAO || '1.0.0'
 const NUMERO_CONEXAO = '12636664220' // DDI + DDD + número, sem +, espaços ou traços
-
-const sessao = path.join(__dirname, 'database', 'qrcode'), handler = require.resolve('../tokito.js'), logger = pino({ level: 'silent' })
+const qrcode = path.join(__dirname, 'database', 'qrcode'), handler = require.resolve('../tokito.js'), logger = pino({ level: 'silent' })
 const cache = new NodeCache(), fotos = new NodeCache({ stdTTL: 1800, checkperiod: 60 })
 
 let tokitojs = require(handler), iniciando = false, reconectando = false, codigoGerado = false
 
-if (!fs.existsSync(sessao)) fs.mkdirSync(sessao, { recursive: true })
+if (!fs.existsSync(qrcode)) fs.mkdirSync(qrcode, { recursive: true })
 
 const grupos = path.join(__dirname, 'database', 'grupos', 'ATIVAÇÕES-TOKITO')
 if (!fs.existsSync(grupos)) fs.mkdirSync(grupos, { recursive: true })
@@ -55,24 +54,10 @@ return null
 }
 
 const participante = (alvo, membros = []) => {
-let jid = typeof alvo === 'string'
-? alvo
-: alvo?.phoneNumber ||
-alvo?.participantAlt ||
-alvo?.jid ||
-alvo?.id ||
-alvo?.participant ||
-alvo?.lid ||
-''
+let jid = typeof alvo === 'string' ? alvo : alvo?.phoneNumber || alvo?.participantAlt || alvo?.jid || alvo?.id || alvo?.participant || alvo?.lid || ''
 
 if (String(jid).includes('@lid')) {
-const achou = membros.find(item =>
-item?.id === jid ||
-item?.lid === jid ||
-item?.jid === jid ||
-item?.participant === jid
-)
-
+const achou = membros.find(item => item?.id === jid || item?.lid === jid || item?.jid === jid || item?.participant === jid)
 jid = achou?.phoneNumber || achou?.participantAlt || achou?.jid || jid
 }
 
@@ -81,68 +66,27 @@ return normalizar(jid)
 
 const legenda = (mensagem, dados) => {
 const mencao = dados.numero ? `@${dados.numero}` : 'usuário'
-
-const tags = {
-'#numero#': mencao,
-'#numerodele#': mencao,
-'#nomegrupo#': dados.grupo,
-'#nomedogp#': dados.grupo,
-'#prefixo#': dados.prefixo,
-'#nomedobot#': dados.bot,
-'#hora#': dados.hora,
-'#dia#': dados.dia,
-'#data#': dados.data,
-'#ano#': dados.ano,
-'#year#': dados.ano,
-'#yeah#': dados.ano,
-'#estado#': dados.estado,
-'#membros#': dados.membros
-}
-
+const tags = { '#numero#': mencao, '#numerodele#': mencao, '#nomegrupo#': dados.grupo, '#nomedogp#': dados.grupo, '#prefixo#': dados.prefixo, '#nomedobot#': dados.bot, '#hora#': dados.hora, '#dia#': dados.dia, '#data#': dados.data, '#ano#': dados.ano, '#year#': dados.ano, '#yeah#': dados.ano, '#estado#': dados.estado, '#membros#': dados.membros }
 let texto = String(mensagem || '')
 
-for (const [tag, valor] of Object.entries(tags)) {
-texto = texto.split(tag).join(String(valor))
-}
-
+for (const [tag, valor] of Object.entries(tags)) texto = texto.split(tag).join(String(valor))
 return texto
 }
 
 const boasvindas = async(tokito, grupo, usuario, config, entrou, texto) => {
-const contexto = { mentionedJid: usuario ? [usuario] : [] }
-const campo = entrou ? 'fundobv' : 'fundosaiu', fundo = config?.[campo], tipo = config?.[`${campo}_tipo`]
+const contexto = { mentionedJid: usuario ? [usuario] : [] }, campo = entrou ? 'fundobv' : 'fundosaiu', fundo = config?.[campo], tipo = config?.[`${campo}_tipo`]
 
 if (fundo && tipo) {
 const buffer = Buffer.from(fundo, 'base64')
 
-if (tipo === 'video') {
-return tokito.sendMessage(grupo, {
-video: buffer,
-mimetype: 'video/mp4',
-gifPlayback: true,
-caption: texto,
-contextInfo: contexto
-})
-}
-
-return tokito.sendMessage(grupo, {
-image: buffer,
-caption: texto,
-contextInfo: contexto
-})
+if (tipo === 'video') return tokito.sendMessage(grupo, { video: buffer, mimetype: 'video/mp4', gifPlayback: true, caption: texto, contextInfo: contexto })
+return tokito.sendMessage(grupo, { image: buffer, caption: texto, contextInfo: contexto })
 }
 
 let foto = 'https://telegra.ph/file/24fa902ead26340f3df2c.png'
+try { foto = await global.fotobv(usuario, foto) } catch {}
 
-try {
-foto = await global.fotobv(usuario, foto)
-} catch {}
-
-return tokito.sendMessage(grupo, {
-image: { url: foto },
-caption: texto,
-contextInfo: contexto
-})
+return tokito.sendMessage(grupo, { image: { url: foto }, caption: texto, contextInfo: contexto })
 }
 
 const evento = async(tokito, atualizacao) => {
@@ -151,20 +95,15 @@ const eventos = Array.isArray(atualizacao) ? atualizacao : [atualizacao]
 for (const item of eventos) {
 try {
 const grupo = item?.id, acao = item?.action
-
-if (!grupo?.endsWith('@g.us')) continue
-if (!['add', 'remove'].includes(acao)) continue
+if (!grupo?.endsWith('@g.us') || !['add', 'remove'].includes(acao)) continue
 
 const dataGp = lergrupo(grupo), config = dataGp?.[0]?.wellcome?.[0]
 if (!config?.bemvindo1) continue
 
 const metadata = await tokito.groupMetadata(grupo), membros = metadata?.participants || [], total = membros.length
-
 let cfg = setting
 
-try {
-cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'database', 'config-all.json'), 'utf8'))
-} catch {}
+try { cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'database', 'config-all.json'), 'utf8')) } catch {}
 
 const agora = new Date()
 const hora = agora.toLocaleTimeString('pt-BR', { timeZone: 'America/Fortaleza', hour: '2-digit', minute: '2-digit' })
@@ -173,23 +112,8 @@ const data = agora.toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' }
 const ano = agora.toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza', year: 'numeric' })
 
 for (const membro of item?.participants || []) {
-const usuario = participante(membro, membros)
-const numero = String(usuario || '').includes('@lid') ? '' : String(usuario || '').split('@')[0].split(':')[0].replace(/\D/g, '')
-const entrou = acao === 'add'
-
-const dados = {
-numero,
-grupo: metadata?.subject || dataGp?.[0]?.name || 'Grupo',
-prefixo: cfg.prefix || '!',
-bot: cfg.NomeDoBot || 'Bot',
-hora,
-dia,
-data,
-ano,
-estado: estado(numero),
-membros: total
-}
-
+const usuario = participante(membro, membros), numero = String(usuario || '').includes('@lid') ? '' : String(usuario || '').split('@')[0].split(':')[0].replace(/\D/g, ''), entrou = acao === 'add'
+const dados = { numero, grupo: metadata?.subject || dataGp?.[0]?.name || 'Grupo', prefixo: cfg.prefix || '!', bot: cfg.NomeDoBot || 'Bot', hora, dia, data, ano, estado: estado(numero), membros: total }
 const texto = legenda(entrou ? config.legendabv : config.legendasaiu, dados)
 
 await boasvindas(tokito, grupo, usuario, config, entrou, texto)
@@ -202,19 +126,8 @@ console.log(colors.red('❌ Erro no bem-vindo:'), error?.message || error)
 }
 
 const motivo = codigo => Object.keys(DisconnectReason).find(chave => DisconnectReason[chave] === codigo) || 'desconhecido'
-
 const erro = console.error, aviso = console.warn, info = console.info
-
-const bloqueados = [
-'Failed to decrypt message with any known session',
-'Bad MAC Error',
-'Bad MAC',
-'SessionCipher.decryptWithSessions',
-'verifyMAC',
-'Closing session: SessionEntry',
-'Removing old closed session: SessionEntry {',
-'Closing stale open session for new outgoing prekey bundle'
-]
+const bloqueados = ['Failed to decrypt message with any known session', 'Bad MAC Error', 'Bad MAC', 'SessionCipher.decryptWithSessions', 'verifyMAC', 'Closing session: SessionEntry', 'Removing old closed session: SessionEntry {', 'Closing stale open session for new outgoing prekey bundle']
 
 console.error = function() {
 const mensagem = util.format(...arguments)
@@ -240,16 +153,15 @@ if (codigoGerado) return
 const numero = numeros(NUMERO_CONEXAO)
 
 if (!numero || numero.length < 11) {
-console.log(colors.red(`
-❌ Número inválido no connect.js.
+return console.log(colors.red(`
+❌ Número inválido.
 
-Coloque o número com DDI + DDD + número.
+Altere NUMERO_CONEXAO usando:
+DDI + DDD + número
 
 Exemplo:
-const NUMERO_CONEXAO = '5511999999999'
+5511999999999
 `))
-
-return
 }
 
 try {
@@ -314,28 +226,22 @@ recarregando = false
 }, 300)
 }
 
-for (const arquivo of arquivos) {
-fs.watchFile(arquivo, { interval: 800 }, (atual, anterior) => {
-if (atual.mtimeMs === anterior.mtimeMs) return
-recarregar(arquivo)
+for (const arquivo of arquivos) fs.watchFile(arquivo, { interval: 800 }, (atual, anterior) => {
+if (atual.mtimeMs !== anterior.mtimeMs) recarregar(arquivo)
 })
-}
 
 const conectar = async() => {
 if (iniciando) return
 iniciando = true
 
 try {
-const { version } = await fetchLatestBaileysVersion(), { state, saveCreds } = await useMultiFileAuthState(sessao)
+const { state, saveCreds } = await useMultiFileAuthState(qrcode)
 
 const tokito = makeWASocket({
-version,
+version: [2, 3000, 1042650569],
 logger,
 browser: ['Linux', 'Opera', '10.0.22631'],
-auth: {
-creds: state.creds,
-keys: makeCacheableSignalKeyStore(state.keys, logger)
-},
+auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
 msgRetryCounterCache: cache,
 mobile: false,
 fireInitQueries: true,
@@ -367,15 +273,10 @@ const chave = `foto:${final}`, salva = fotos.get(chave)
 if (salva) return salva
 
 let foto = null
-
-try {
-foto = await tokito.profilePictureUrl(final, 'image')
-} catch {}
+try { foto = await tokito.profilePictureUrl(final, 'image') } catch {}
 
 if (!foto && final.endsWith('@s.whatsapp.net')) {
-try {
-foto = await tokito.profilePictureUrl(`${numeros(final)}@c.us`, 'image')
-} catch {}
+try { foto = await tokito.profilePictureUrl(`${numeros(final)}@c.us`, 'image') } catch {}
 }
 
 foto = foto || fallback
@@ -396,10 +297,7 @@ const chave = `grupo:${final}`, salva = fotos.get(chave)
 if (salva) return salva
 
 let foto = null
-
-try {
-foto = await tokito.profilePictureUrl(final, 'image')
-} catch {}
+try { foto = await tokito.profilePictureUrl(final, 'image') } catch {}
 
 foto = foto || fallback
 fotos.set(chave, foto)
@@ -411,9 +309,7 @@ return fallback
 }
 
 tokito.ev.process(async eventos => {
-if (eventos['group-participants.update']) {
-await evento(tokito, eventos['group-participants.update'])
-}
+if (eventos['group-participants.update']) await evento(tokito, eventos['group-participants.update'])
 
 if (eventos['messages.upsert']) {
 const upsert = eventos['messages.upsert']
@@ -438,11 +334,10 @@ break
 
 case 'open': {
 global.startTime = Math.floor(Date.now() / 1000)
-reconectando = false
-codigoGerado = true
+reconectando = false, codigoGerado = true
 
-console.log(banner3?.string || colors.cyan('\nTOKITO BASE\n'))
-console.log(banner2?.string || colors.blue('dylan Modz'))
+console.log(banner3?.string || colors.magenta('\nAURORA BASE\n'))
+console.log(banner2?.string || colors.magenta('Yosh'))
 console.log(colors.green(`\n✅ ${NomeDoBot} conectado com sucesso!\n`))
 
 try {
@@ -454,8 +349,7 @@ break
 }
 
 case 'close': {
-const codigo = lastDisconnect?.error ? new Boom(lastDisconnect.error).output.statusCode : 0
-const causa = motivo(codigo)
+const codigo = lastDisconnect?.error ? new Boom(lastDisconnect.error).output.statusCode : 0, causa = motivo(codigo)
 
 console.log(colors.red(`\n❌ Conexão fechada | Código: ${codigo} | Motivo: ${causa}\n`))
 
@@ -466,14 +360,11 @@ process.exit(0)
 
 if (reconectando) return
 
-reconectando = true
-codigoGerado = false
-
+reconectando = true, codigoGerado = false
 console.log(colors.yellow('⚠️ Reconectando o bot em 5 segundos...'))
 
 setTimeout(() => {
-reconectando = false
-iniciando = false
+reconectando = false, iniciando = false
 conectar()
 }, 5000)
 
@@ -491,8 +382,7 @@ console.log(colors.red('\n❌ Ocorreu um erro ao iniciar a conexão.\n'))
 console.log(error)
 
 setTimeout(() => {
-codigoGerado = false
-iniciando = false
+codigoGerado = false, iniciando = false
 conectar()
 }, 5000)
 }
@@ -508,6 +398,4 @@ console.log(colors.red('❌ unhandledRejection detectado:'))
 console.log(erro)
 })
 
-conectar().catch(erro => {
-console.log(colors.red(`❌ Ocorreu um erro ao inicializar o bot: ${erro?.message || erro}`))
-})
+conectar().catch(erro => console.log(colors.red(`❌ Ocorreu um erro ao inicializar o bot: ${erro?.message || erro}`)))
