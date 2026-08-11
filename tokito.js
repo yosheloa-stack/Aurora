@@ -18,16 +18,6 @@ const bin = require('ffmpeg-static')
 if (bin && fs.existsSync(bin)) ffmpegBin = bin
 } catch {}
 
-// Módulo opcional de IA (Aurora AI). Se o arquivo ainda não existir no deploy,
-// o recurso fica desativado em vez de derrubar o processamento das mensagens.
-let responderAurora = null
-try {
-({ responderAurora } = require('./DADOS_TOKITO/ai/aurora_ai'))
-} catch {
-console.log(colors.yellow('⚠️ Módulo ./DADOS_TOKITO/ai/aurora_ai.js não encontrado — recurso Aurora AI desativado.'))
-}
-
-
 // ===== CACHE DE METADATA (corrige erro 428 Connection Closed) =====
 const cacheMetadata = new Map()
 
@@ -696,7 +686,16 @@ if (isGroup && !info.key.fromMe && !isCmd) {
   const mencionaAurora = body.toLowerCase().includes('aurora') || 
                          (ctxMsg?.mentionedJid?.length > 0 && ctxMsg.mentionedJid.some(jid => jid.includes(tokito.user.id.split(':')[0])))
   
-  if (mencionaAurora && responderAurora) {
+  if (mencionaAurora) {
+    let responderAurora = null
+    try {
+      ({ responderAurora } = require('./DADOS_TOKITO/ai/aurora_ai'))
+    } catch {
+      console.log(colors.yellow('⚠️ Módulo ./DADOS_TOKITO/ai/aurora_ai.js não encontrado — recurso Aurora AI desativado.'))
+    }
+
+    if (!responderAurora) continue
+
     const resposta = responderAurora(tokito, from, sender, body, isGroup, isGroupAdmins, SoDono, prefix, reply, normalizar)
 
     if (!resposta) continue
