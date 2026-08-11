@@ -703,55 +703,64 @@ if (isGroup && !info.key.fromMe && !isCmd) {
     if (resposta?.type === 'execute') {
       const cmd = resposta.command
       const args = resposta.args
-      
-      // Prioridade: args (número/mensagem após o comando) > menção > sender
-      let targetRaw = args?.trim() || ''
-      
-      // Se não tem args, verifica menção
-      if (!targetRaw && menc_os2) {
-        targetRaw = String(menc_os2)
-      }
-      
-      // Se ainda não tem target, pede para marcar a pessoa
-      if (!targetRaw) {
-        return await reply(`⚠️ *Comando ${cmd.toUpperCase()} identificado, mas preciso de um alvo!*\n\nMarque o usuário ou digite o número.`)
-      }
-      
-      let target = String(targetRaw)
-      
-      // 1. Limpar palavras de ligação e manter lid_ intacto para resolução posterior
-      const palavras = target.split(/\s+/)
-      let textoLimpo = ''
-      for (const palavra of palavras) {
-        if (['no', 'na', 'nos', 'nas', 'para', 'pelo', 'pela', 'pelos', 'pelas', 'em', 'do', 'da', 'dos', 'das', 'de', 'a', 'o', 'os', 'as', 'com', 'sem'].includes(palavra.toLowerCase())) continue
-        if (palavra.startsWith('@')) textoLimpo += palavra.slice(1) + ' '
-        else textoLimpo += palavra + ' '
-      }
-      target = textoLimpo.trim()
-      
-      // 2. Resolver marcador "lid_<id>" para número real, usando o mapeamento oficial
-      // (nunca fabricar telefone a partir dos dígitos do lid)
-      const lidMatch = target.match(/^lid_(\d+)(?::\d+)?$/)
-      if (lidMatch) {
-        const lidJid = jidNormalizedUser(`${lidMatch[1]}@lid`)
-        const metadata = isGroup ? groupMetadata : await pegarMetadata(tokito, from)
-        target = await resolverParticipanteParaPn(tokito, lidJid, metadata?.participants)
-      }
-      // 3. Se ainda tem @, normalizar
-      else if (target.includes('@')) {
-        try { target = await normalizar(target, isGroup ? groupMetadata : null) } catch {}
-      }
-      // 4. Se é só número, formatar
-      else {
-        const numLimpo = target.replace(/\D/g, '')
-        if (numLimpo.length >= 10) {
-          target = numLimpo + '@s.whatsapp.net'
-        }
-      }
 
-      // 5. Validação final
-      if (!target || target === '@s.whatsapp.net') {
-        return await reply('⚠️ Não consegui identificar o usuário. Marque a pessoa ou digite o número corretamente.')
+      // Só mute/demute/ban/promover/rebaixar precisam de um usuário marcado.
+      // Os outros comandos (menu, ping, antipv, botoff...) não devem cair
+      // no "preciso de um alvo" — cada um trata seus próprios argumentos.
+      const COMANDOS_COM_ALVO = ['mute', 'demute', 'ban', 'promover', 'rebaixar']
+
+      let target = ''
+
+      if (COMANDOS_COM_ALVO.includes(cmd)) {
+        // Prioridade: args (número/mensagem após o comando) > menção > sender
+        let targetRaw = args?.trim() || ''
+
+        // Se não tem args, verifica menção
+        if (!targetRaw && menc_os2) {
+          targetRaw = String(menc_os2)
+        }
+
+        // Se ainda não tem target, pede para marcar a pessoa
+        if (!targetRaw) {
+          return await reply(`⚠️ *Comando ${cmd.toUpperCase()} identificado, mas preciso de um alvo!*\n\nMarque o usuário ou digite o número.`)
+        }
+
+        target = String(targetRaw)
+
+        // 1. Limpar palavras de ligação e manter lid_ intacto para resolução posterior
+        const palavras = target.split(/\s+/)
+        let textoLimpo = ''
+        for (const palavra of palavras) {
+          if (['no', 'na', 'nos', 'nas', 'para', 'pelo', 'pela', 'pelos', 'pelas', 'em', 'do', 'da', 'dos', 'das', 'de', 'a', 'o', 'os', 'as', 'com', 'sem'].includes(palavra.toLowerCase())) continue
+          if (palavra.startsWith('@')) textoLimpo += palavra.slice(1) + ' '
+          else textoLimpo += palavra + ' '
+        }
+        target = textoLimpo.trim()
+
+        // 2. Resolver marcador "lid_<id>" para número real, usando o mapeamento oficial
+        // (nunca fabricar telefone a partir dos dígitos do lid)
+        const lidMatch = target.match(/^lid_(\d+)(?::\d+)?$/)
+        if (lidMatch) {
+          const lidJid = jidNormalizedUser(`${lidMatch[1]}@lid`)
+          const metadata = isGroup ? groupMetadata : await pegarMetadata(tokito, from)
+          target = await resolverParticipanteParaPn(tokito, lidJid, metadata?.participants)
+        }
+        // 3. Se ainda tem @, normalizar
+        else if (target.includes('@')) {
+          try { target = await normalizar(target, isGroup ? groupMetadata : null) } catch {}
+        }
+        // 4. Se é só número, formatar
+        else {
+          const numLimpo = target.replace(/\D/g, '')
+          if (numLimpo.length >= 10) {
+            target = numLimpo + '@s.whatsapp.net'
+          }
+        }
+
+        // 5. Validação final
+        if (!target || target === '@s.whatsapp.net') {
+          return await reply('⚠️ Não consegui identificar o usuário. Marque a pessoa ou digite o número corretamente.')
+        }
       }
 
       try {
@@ -838,7 +847,7 @@ _O grupo será aberto automaticamente às ${hora}._`)
         if (cmd === 'bloqueargp') {
           if (!args) return await reply('⚠️ Marque o grupo ou digite o ID para bloquear.')
           const grupos = ler()
-          delete grupos[target || from]
+          delete grupos[String(args).trim() || from]
           salvar(grupos)
           return await reply(`🔒 *GRUPO BLOQUEADO!*
 

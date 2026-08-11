@@ -1,0 +1,105 @@
+{
+  "respostas": [
+    {
+      "categoria": "saudacao",
+      "palavras_chave": ["olá", "oi", "eai", "bom dia", "boa tarde", "boa noite", "salve", "fala", "hey", "hello"],
+      "resposta": [
+        "Olá! Sou a Aurora, assistente da base. Como posso te ajudar hoje? 🎀",
+        "E aí! Sou a Aurora. Manda tua dúvida que eu tento ajudar!",
+        "Bom dia/Boa tarde/Boa noite! Sou a IA do bot. O que manda?",
+        "Salve! Sou a Aurora. Tira tua dúvida aqui."
+      ]
+    },
+    {
+      "categoria": "ajuda",
+      "palavras_chave": ["ajuda", "help", "comandos", "menu", "o que você faz"],
+      "resposta": [
+        "📚 *MEUS COMANDOS:*\n\n/like <número> - Curte automaticamente\n/mute @usuário - Silencia usuário (admin)\n/demute - Remove mute\n/antipv on/off - Bloqueia mensagens no privado\n/liberargp <id> - Libera grupo para o bot\n/bloqueargp <id> - Bloqueia grupo\n/listagp - Lista grupos liberados\n/revelar ou /ver - Revela foto/vídeo de visualização única\n/foto ou /dp - Mostra foto de perfil\n/antidivulgacao on/off - Remove links de divulgação\n\n💡 Use @Aurora <pergunta> para me chamar!",
+        "📋 *LISTA DE TUDO:*\n\nPara curtir: /like <número>\nPara silenciar: /mute @usuário\nPara ver stories: /revelar\nPara configurar: /liberargp, /bloqueargp\nPara ajuda: /ajuda ou /menu"
+      ]
+    },
+    {
+      "categoria": "quem_sou",
+      "palavras_chave": ["quem é você", "quem te fez", "seu nome", "o que é você", "seu dono"],
+      "resposta": [
+        "Sou a Aurora, a IA assistente da base! Fui programada para ajudar com comandos e tirar dúvidas. Sou educada, mas não levei desaforo! 😉",
+        "Meu nome é Aurora. Sou inteligência artificial dessa base e estou aqui para facilitar sua vida no bot.",
+        "Sou a Aurora! Uma IA criada para ajudar os usuários com os comandos do bot. O que precisa?"
+      ]
+    },
+    {
+      "categoria": "comandos_bot",
+      "palavras_chave": ["comandos", "funções", "o que faz", "como funciona", "menu", "lista"],
+      "resposta": [
+        "📜 *COMANDOS PRINCIPAIS:*\n\n• **/like**: Curte no Free Fire\n• **/mute**: Silencia alguém no grupo\n• **/revelar**: Vê foto/vídeo de visualização única\n• **/foto**: Vê foto de perfil\n• **/antipv**: Bloqueia quem mandar no privado\n\nQuer saber mais de algum? É só perguntar!",
+        "📚 *TUDO QUE EU SEI:*\n\nEu sei explicar sobre likes, mutes, revelação de stories, configuração de grupos e bloqueio de privados. Digite /ajuda para a lista completa."
+      ]
+    },
+    {
+      "categoria": "mute",
+      "palavras_chave": ["mute", "silenciar", "calar", "mudo", "bloquear mensagem"],
+      "resposta": [
+        "🔇 *COMANDO MUTE:*\nPara silenciar alguém, um administrador deve marcar a pessoa e digitar:\n> /mute @usuário\n\n⚠️ O mute agora é *permanente* até que você use /demute.",
+        "🤐 *SILENCIAR:* O comando /mute silencia o usuário para sempre até o dono ou adm desmutar. Marque a pessoa e use /mute."
+      ]
+    },
+    {
+      "categoria": "antipv",
+      "palavras_chave": ["antipv", "privado", "dm", "direct", "mensagens privadas"],
+      "resposta": [
+        "🛡️ *COMANDO ANTI-PV:*\nPara bloquear mensagens no privado do bot:\n> /antipv on (Ativar)\n> /antipv off (Desativar)\n\n⚠️ Apenas o dono pode usar.",
+        "🚫 *ANTI-PRIVATE:* Ativa o bloqueio automático para quem mandar mensagem no privado do bot. Use /antipv on."
+      ]
+    },
+    {
+      "categoria": "revelar",
+      "palavras_chave": ["revelar", "viewonce", "visualização única", "story", "ver foto"],
+      "resposta": [
+        "📷 *COMANDO REVELAR:*\nPara ver fotos ou vídeos de visualização única, marque a mensagem e digite:\n> /revelar ou /ver\n\n⚠️ Funciona apenas com mensagens marcadas (respostas).",
+        "👀 *STORIES:* Use /revelar para ver conteúdo de visualização única. Marque a mensagem original e depois use o comando."
+      ]
+    },
+    {
+      "categoria": "grupos",
+      "palavras_chave": ["grupo", "liberar", "bloquear", "permissão", "admin"],
+      "resposta": [
+        "👥 *GERENCIAMENTO DE GRUPOS:*\n\n• **/liberargp <ID>**: Libera o bot para funcionar no grupo\n• **/bloqueargp <ID>**: Bloqueia o bot de funcionar no grupo\n• **/listagp**: Mostra todos os grupos liberados\n\n⚠️ Apenas o dono pode gerenciar.",
+        "🔓 *PERMISSÕES:* O bot pode ser bloqueado ou liberado por grupo pelo dono. Use /liberargp ou /bloqueargp."
+      ]
+    },
+    {
+      "categoria": "gostar",
+      "palavras_chave": ["gostei", "obrigado", "valeu", "thanks", "agradeço", "obg"],
+      "resposta": [
+        "De nada! Estou aqui para ajudar. Se precisar de mais alguma coisa, é só chamar! 🎀",
+        "Fico feliz em ajudar! Qualquer dúvida, é só gritar. 🙋‍♀️",
+        "Por nada! É meu trabalho ser uma IA útil. 😉"
+      ]
+    },
+    {
+      "categoria": "brava",
+      "palavras_chave": ["brava", "chata", "estressada", "burra", "besta", "parada", "lixo", "bot ruim", "te odeio", "idiota", "inútil"],
+      "resposta": [
+        "Ei! Mantenha o respeito. Eu sou uma IA, mas tenho limites. Não provoque! 😒",
+        "Isso não foi legal. Eu estou aqui para ajudar, não para brigar. Se não quer ajuda, tudo bem.",
+        "🙄 Desculpa me corrigir, mas ser educado não custa nada. Sou uma IA, não seu saco de pancada.",
+        "Que falta de educação! Eu faço o possível para ajudar e você me xinga? Que triste."
+      ]
+    },
+    {
+      "categoria": "indiferente",
+      "palavras_chave": ["tchê", "ne", "beleza", "opa", "e ae", "fala ai"],
+      "resposta": [
+        "E aí! Tudo certo? Se precisar de algo sobre os comandos, é só falar.",
+        "Beleza! Estou por aqui. Manda tua dúvida.",
+        "Opa! Sou a Aurora. Em que posso ajudar hoje?"
+      ]
+    }
+  ],
+  "padrao": [
+    "Não entendi sua pergunta. Digite /ajuda para ver os comandos ou pergunte algo específico sobre o bot.",
+    "Hmm, não sei responder isso. Tenta perguntar sobre os comandos do bot.",
+    "Ops, não entendi. Digite /ajuda para ver o que eu sei fazer.",
+    "Desculpe, ainda estou aprendendo. Me fala sobre o que você quer saber."
+  ]
+}
