@@ -53,12 +53,19 @@ return null
 }
 }
 
-const participante = (alvo, membros = []) => {
-let jid = typeof alvo === 'string' ? alvo : alvo?.phoneNumber || alvo?.participantAlt || alvo?.jid || alvo?.id || alvo?.participant || alvo?.lid || ''
+const participante = async (tokito, alvo, membros = []) => {
+let jid = typeof alvo === 'string' ? alvo : alvo?.phoneNumber || alvo?.participantAlt || alvo?.id || alvo?.participant || alvo?.lid || ''
 
 if (String(jid).includes('@lid')) {
-const achou = membros.find(item => item?.id === jid || item?.lid === jid || item?.jid === jid || item?.participant === jid)
-jid = achou?.phoneNumber || achou?.participantAlt || achou?.jid || jid
+const achou = membros.find(item => item?.id === jid || item?.lid === jid)
+if (achou?.phoneNumber) return normalizar(achou.phoneNumber)
+
+// Sem phoneNumber na metadata: tenta o mapeamento oficial do Baileys em vez de
+// deixar a marcação sem número (nunca "chuta" um telefone a partir do lid).
+try {
+const pn = await tokito?.signalRepository?.lidMapping?.getPNForLID(jid)
+if (pn) return normalizar(pn)
+} catch {}
 }
 
 return normalizar(jid)
@@ -112,7 +119,7 @@ const data = agora.toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' }
 const ano = agora.toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza', year: 'numeric' })
 
 for (const membro of item?.participants || []) {
-const usuario = participante(membro, membros), numero = String(usuario || '').includes('@lid') ? '' : String(usuario || '').split('@')[0].split(':')[0].replace(/\D/g, ''), entrou = acao === 'add'
+const usuario = await participante(tokito, membro, membros), numero = String(usuario || '').includes('@lid') ? '' : String(usuario || '').split('@')[0].split(':')[0].replace(/\D/g, ''), entrou = acao === 'add'
 const dados = { numero, grupo: metadata?.subject || dataGp?.[0]?.name || 'Grupo', prefixo: cfg.prefix || '!', bot: cfg.NomeDoBot || 'Bot', hora, dia, data, ano, estado: estado(numero), membros: total }
 const texto = legenda(entrou ? config.legendabv : config.legendasaiu, dados)
 

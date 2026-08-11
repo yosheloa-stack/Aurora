@@ -1,4 +1,4 @@
-/*
+/* 
 * Não utilize o nome original do bot.
 * Utilize com respeito e responsabilidade.
 * Author: Yosh.
@@ -11,12 +11,80 @@ const { getContentType, jidNormalizedUser, proto, prepareWAMessageMedia, generat
 const { NomeDoBot, ownerName, prefix, channel, channeldl, API_URL, API_KEY_TOKITO, ownerNumber, CREDENTIALS_USER } = setting
 
 // Caminho do ffmpeg: usa o binario estatico (ffmpeg-static) quando disponivel
-// e cai pro ffmpeg do sistema caso contrario.
+// e cai pro ffmpeg do sistema caso contrario (portabilidade na Square Cloud).
 let ffmpegBin = 'ffmpeg'
 try {
 const bin = require('ffmpeg-static')
 if (bin && fs.existsSync(bin)) ffmpegBin = bin
 } catch {}
+
+// Módulo opcional de IA (Aurora AI). Se o arquivo ainda não existir no deploy,
+// o recurso fica desativado em vez de derrubar o processamento das mensagens.
+let responderAurora = null
+try {
+({ responderAurora } = require('./DADOS_TOKITO/ai/aurora_ai'))
+} catch {
+console.log(colors.yellow('⚠️ Módulo ./DADOS_TOKITO/ai/aurora_ai.js não encontrado — recurso Aurora AI desativado.'))
+}
+
+
+// ===== CACHE DE METADATA (corrige erro 428 Connection Closed) =====
+const cacheMetadata = new Map()
+
+async function pegarMetadata(tokito, jid) {
+try {
+const cache = cacheMetadata.get(jid)
+if (cache && Date.now() - cache.ts < 60000) return cache.data
+const data = await tokito.groupMetadata(jid)
+if (data) cacheMetadata.set(jid, { data, ts: Date.now() })
+return data
+} catch {
+const cache = cacheMetadata.get(jid)
+if (cache) return cache.data
+return ''
+}
+}
+
+// ===== RESOLUÇÃO REAL DE @lid -> NÚMERO (PN) =====
+// Usa o mapeamento oficial que o Baileys mantém (tokito.signalRepository.lidMapping),
+// evitando "chutar" um número a partir dos dígitos do @lid (esses dígitos NÃO são
+// o número de telefone da pessoa, são só o identificador interno do lid).
+async function resolverLidParaPn(tokito, jidBruto) {
+const jid = String(jidBruto || '')
+if (!jid || !jid.includes('@lid')) return jid
+
+try {
+const pn = await tokito?.signalRepository?.lidMapping?.getPNForLID(jid)
+if (pn) return jidNormalizedUser(pn)
+} catch {}
+
+// Não foi possível mapear ainda: devolve o próprio @lid (jid real e válido),
+// nunca um número inventado a partir do id do lid.
+return jidNormalizedUser(jid)
+}
+
+// Resolve um jid de participante de grupo (achado na metadata) para PN, preferindo
+// o phoneNumber já conhecido pela metadata e caindo pro mapeamento do Baileys.
+async function resolverParticipanteParaPn(tokito, jid, participantes) {
+const alvo = String(jid || '')
+if (!alvo) return ''
+if (!alvo.includes('@lid')) return jidNormalizedUser(alvo)
+
+const achou = Array.isArray(participantes) ? participantes.find(p => p?.id === alvo || p?.lid === alvo) : null
+if (achou?.phoneNumber) return jidNormalizedUser(achou.phoneNumber)
+
+return resolverLidParaPn(tokito, alvo)
+}
+
+// Resolve uma lista de jids (ex: admins/membros do grupo) mantendo os que já são PN
+// e tentando mapear os que ainda estão em @lid.
+async function resolverListaParaPn(tokito, lista) {
+const resultado = []
+for (const jidBruto of Array.isArray(lista) ? lista : []) {
+resultado.push(await resolverLidParaPn(tokito, jidBruto))
+}
+return resultado
+}
 
 
 if (!fs.existsSync(path.dirname(arquivo))) fs.mkdirSync(path.dirname(arquivo), { recursive: true })
@@ -133,6 +201,72 @@ global.intervaloGruposProgramadosTokito = setInterval(() => processar().catch(()
 }
 
 
+// SISTEMA DE MUTES
+const arquivoMutes = path.join(__dirname, 'DADOS_TOKITO', 'database', 'mutes.json')
+if (!fs.existsSync(path.dirname(arquivoMutes))) fs.mkdirSync(path.dirname(arquivoMutes), { recursive: true })
+if (!fs.existsSync(arquivoMutes)) fs.writeFileSync(arquivoMutes, JSON.stringify({}, null, 2))
+
+const lerMutes = () => {
+try {
+const dados = JSON.parse(fs.readFileSync(arquivoMutes, 'utf8'))
+return dados && typeof dados === 'object' && !Array.isArray(dados) ? dados : {}
+} catch {
+return {}
+}
+}
+
+const salvarMutes = dados => fs.writeFileSync(arquivoMutes, JSON.stringify(dados, null, 2))
+
+const limparMutesExpirados = () => {
+const mutes = lerMutes()
+const agora = Date.now()
+let mudou = false
+for (const jid of Object.keys(mutes)) {
+if (mutes[jid].expiraEm && mutes[jid].expiraEm <= agora) {
+delete mutes[jid]
+mudou = true
+}
+}
+if (mudou) salvarMutes(mutes)
+}
+
+const isMuted = jid => {
+const mutes = lerMutes()
+return mutes[jid] || false
+}
+
+const checarAntiDivulgacao = (mensagem, sender, from) => {
+try {
+const texto = String(mensagem?.conversation || mensagem?.extendedTextMessage?.text || '').toLowerCase()
+if (!texto) return false
+
+// Remover menções @ para evitar falsos positivos
+const textoSemMencoes = texto.replace(/@\d+/g, '').replace(/@\w+/g, '')
+
+const padroesDivulgacao = [
+/whatsapp\.com\/channel\//i,
+/whatsapp\.com\/group\/\?i=/i,
+/wa\.me\/\d/i,
+/\b(?:https?:\/\/)?(?:whatsapp\.com|chat\.whatsapp\.com)\/[a-zA-Z0-9-]+/i,
+/\b\d{4,5}[-\s]?\d{4,5}[-\s]?\d{4}\b/,
+/link de convite/i,
+/convite do grupo/i,
+/junte-se/i,
+/entra ai/i,
+/entra no meu/i,
+/abra um grupo/i
+]
+
+for (const padrao of padroesDivulgacao) {
+if (padrao.test(textoSemMencoes)) return true
+}
+
+return false
+} catch {
+return false
+}
+}
+
 const pastaGrupos = path.join(__dirname, 'DADOS_TOKITO', 'database', 'grupos', 'ATIVAÇÕES-TOKITO')
 if (!fs.existsSync(pastaGrupos)) fs.mkdirSync(pastaGrupos, { recursive: true })
 
@@ -165,7 +299,7 @@ const salvarLikeLimite = dados => fs.writeFileSync(arquivoLikeLimite, JSON.strin
 
 const dataDeHoje = () => new Intl.DateTimeFormat('pt-BR', { timeZone: fuso, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).split('/').reverse().join('-')
 
-const LIMITE_LIKE_VIP = 7
+const LIMITE_LIKE_VIP = 30
 const LIMITE_LIKE_MEMBRO = 1
 
 const checarLimiteLike = (sender, vipAtivo) => {
@@ -191,20 +325,20 @@ name: nome || 'Grupo',
 groupId: jid,
 wellcome: [{
 bemvindo1: false,
-legendabv: `「🧊」 #numero#
-- *🧊 | ᴜᴍ ɴᴏᴠᴏ ᴍᴇᴍʙʀᴏ ᴇɴᴛʀᴏᴜ ɴᴏ ɢʀᴜᴘᴏ…* ↴
-『🧊』ɢʀᴜᴘᴏ: #nomegrupo#
-『🧊』ᴍᴇᴍʙʀᴏs: #membros#
-『🧊』ᴇsᴛᴀᴅᴏ: #estado#
-『🧊』ʜᴏʀᴀ: #hora#
+legendabv: `「🎀」 #numero#
+- *🎀 | ᴜᴍ ɴᴏᴠᴏ ᴍᴇᴍʙʀᴏ ᴇɴᴛʀᴏᴜ ɴᴏ ɢʀᴜᴘᴏ…* ↴
+『🎀』ɢʀᴜᴘᴏ: #nomegrupo#
+『🎀』ᴍᴇᴍʙʀᴏs: #membros#
+『🎀』ᴇsᴛᴀᴅᴏ: #estado#
+『🎀』ʜᴏʀᴀ: #hora#
 
 *ꜰɪᴄᴀᴍᴏꜱ ᴍᴜɪᴛᴏ ꜰᴇʟɪᴢᴇꜱ ᴘᴏʀ ᴛᴇʀ ᴠᴏᴄᴇ̂ ᴄᴏɴᴏꜱᴄᴏ.*
-> *🧊 | ᴜsᴇ #prefixo#menu ᴘᴀʀᴀ ᴠᴇʀ ᴏs ᴄᴏᴍᴀɴᴅᴏs.*`,
-legendasaiu: `「🧊」 #numero#
-- *🧊 | ᴜᴍ ᴍᴇᴍʙʀᴏ ꜱᴀɪᴜ ᴅᴏ ɢʀᴜᴘᴏ…* ↴
-『🧊』ɢʀᴜᴘᴏ: #nomegrupo#
-『🧊』ᴍᴇᴍʙʀᴏs: #membros#
-『🧊』ʜᴏʀᴀ: #hora#
+> *🎀 | ᴜsᴇ #prefixo#menu ᴘᴀʀᴀ ᴠᴇʀ ᴏs ᴄᴏᴍᴀɴᴅᴏs.*`,
+legendasaiu: `「🎀」 #numero#
+- *🎀 | ᴜᴍ ᴍᴇᴍʙʀᴏ ꜱᴀɪᴜ ᴅᴏ ɢʀᴜᴘᴏ…* ↴
+『🎀』ɢʀᴜᴘᴏ: #nomegrupo#
+『🎀』ᴍᴇᴍʙʀᴏs: #membros#
+『🎀』ʜᴏʀᴀ: #hora#
 
 *ᴀɢʀᴀᴅᴇᴄᴇᴍᴏꜱ ᴘᴇʟᴀ ᴘᴀʀᴛɪᴄɪᴘᴀᴄ̧ᴀ̃ᴏ.*`,
 fundobv: null,
@@ -222,6 +356,8 @@ console.error(err.stack)
 async function starttokito(tokito, upsert) {
 try {
 
+if (tokito?.ws?.readyState !== undefined && tokito.ws.readyState !== 1) return
+
 iniciar(tokito)
 
 for (const info of upsert?.messages || []) {
@@ -233,6 +369,17 @@ if (!from || isStatus) continue
 if (!info.message) continue
 if (info.key?.fromMe) continue
 if (upsert.type === 'append') continue
+
+// === SISTEMA ANTI-PRIVATE (ANTIPV) ===
+if (!isGroup && !from.includes('@newsletter') && !from.includes('@broadcast') && nescessario.antipv) {
+    try {
+        await tokito.updateBlockStatus(from, 'block')
+        console.log(colors.red(`[ANTI-PV] Usuário ${from} bloqueado por enviar mensagem no privado.`))
+    } catch (e) {
+        console.error(`[ANTI-PV] Erro ao bloquear usuário:`, e)
+    }
+    continue
+}
 
 const mensagem = info.message?.ephemeralMessage?.message || info.message?.viewOnceMessage?.message || info.message?.viewOnceMessageV2?.message || info.message?.viewOnceMessageV2Extension?.message || info.message
 
@@ -299,7 +446,7 @@ var PR_String = Procurar_String.toLowerCase().normalize('NFD').replace(/[\u0300-
 let groupMetadata = ''
 
 try {
-groupMetadata = isGroup ? await tokito.groupMetadata(from) : ''
+groupMetadata = isGroup ? await pegarMetadata(tokito, from) : ''
 } catch {
 groupMetadata = ''
 }
@@ -322,17 +469,17 @@ const isWelkom = isGroup ? Boolean(dataGp?.[0]?.wellcome?.[0]?.bemvindo1) : unde
 
 let sender = jidNormalizedUser(
 isGroup
-? info?.key?.participantAlt || info?.key?.senderAlt || info?.participantAlt || info?.key?.participant || info?.participant || ''
-: info?.key?.senderAlt || info?.key?.participantAlt || info?.key?.remoteJidAlt || info?.key?.remoteJid || from
+? info?.key?.participantAlt || info?.key?.participant || info?.participant || ''
+: info?.key?.senderAlt || info?.key?.remoteJidAlt || info?.key?.remoteJid || from
 )
 
+// 🔧 CORREÇÃO: Resolver @lid para o número real (PN) sem "chutar" dígitos.
+// 1ª tentativa: metadata do grupo (phoneNumber já conhecido).
+// 2ª tentativa: mapeamento oficial do Baileys (signalRepository.lidMapping).
+// Se nada resolver, mantém o @lid original (é um jid real e válido).
 if (String(sender || '').includes('@lid')) {
-sender = jidNormalizedUser(info?.key?.participantAlt || info?.key?.senderAlt || info?.participantAlt || info?.key?.remoteJidAlt || sender)
+sender = await resolverParticipanteParaPn(tokito, sender, isGroup ? groupMetadata?.participants : null)
 }
-
-sender = String(sender || '').includes('@')
-? `${String(sender).split('@')[0].split(':')[0]}@${String(sender).split('@')[1]}`
-: String(sender || '').split(':')[0]
 
 const NumeroDoBot = String(tokito.user?.id || '').split(':')[0].split('@')[0]
 const botNumber = jidNormalizedUser(`${NumeroDoBot}@s.whatsapp.net`)
@@ -350,8 +497,8 @@ const isBot = info.key?.fromMe === true
 const SoDono = numerodono.includes(sender) || isBot
 const DonoOficial = nmrdn ? nmrdn === sender : false
 
-const groupAdmins = isGroup ? getGroupAdmins(groupMembers) : []
-const membrosGrupo = isGroup ? getMembros(groupMembers) : []
+const groupAdmins = isGroup ? await resolverListaParaPn(tokito, getGroupAdmins(groupMembers)) : []
+const membrosGrupo = isGroup ? await resolverListaParaPn(tokito, getMembros(groupMembers)) : []
 const adminsNormalizados = groupAdmins.map(admin => jidNormalizedUser(String(admin || '')))
 const senderNormalizado = jidNormalizedUser(String(sender || ''))
 const botNormalizado = jidNormalizedUser(String(botNumber || ''))
@@ -382,37 +529,34 @@ const Res_SoDono = mess.onlyOwner()
 
 // FUNÇÕES DE MARCAÇÕES ESSENCIAL \\
 
-const normalizar = jid => {
+// 🔧 CORREÇÃO: nunca fabrica um número a partir dos dígitos do @lid (esses dígitos
+// são só o id interno do lid, não o telefone da pessoa). Resolve pela metadata do
+// grupo (phoneNumber) e, se ainda não souber, pelo mapeamento oficial do Baileys.
+const normalizar = async (jid, metaOverride = null) => {
 jid = String(jid || '')
-
 if (!jid) return ''
 
-if (jid.includes('@lid') && isGroup && groupMetadata?.participants) {
-const achou = groupMetadata.participants.find(p => p?.id === jid || p?.lid === jid || p?.jid === jid || p?.participant === jid)
+if (!jid.includes('@lid')) return jidNormalizedUser(jid)
 
-if (achou?.jid) return achou.jid
-if (achou?.phoneNumber) return achou.phoneNumber
-if (achou?.participantPn) return achou.participantPn
-}
-
-return jid
+const participantes = metaOverride?.participants || (isGroup ? groupMetadata?.participants : null)
+return resolverParticipanteParaPn(tokito, jid, participantes)
 }
 
 const ctxMsg = mensagem?.extendedTextMessage?.contextInfo || mensagem?.stickerMessage?.contextInfo || mensagem?.imageMessage?.contextInfo || mensagem?.videoMessage?.contextInfo || info.message?.extendedTextMessage?.contextInfo || info.message?.imageMessage?.contextInfo || info.message?.videoMessage?.contextInfo || {}
-const quotedParticipant = normalizar(ctxMsg.participantAlt || ctxMsg.participant || '')
-const mentionedList = Array.isArray(ctxMsg.mentionedJid) ? ctxMsg.mentionedJid.map(normalizar).filter(Boolean) : []
+const quotedParticipant = await normalizar(ctxMsg.participantAlt || ctxMsg.participant || '')
+const mentionedList = Array.isArray(ctxMsg.mentionedJid) ? (await Promise.all(ctxMsg.mentionedJid.map(j => normalizar(j)))).filter(Boolean) : []
 const menc_sticker = mentionedList.length > 0 ? mentionedList[0] : quotedParticipant || null
 let menc_prt = quotedParticipant || ''
 const menc_jid2 = mentionedList
 const qSeguro = String(q || '')
 const temMention = qSeguro.includes('@')
 const menc_os2 = temMention ? menc_jid2.length > 0 ? menc_jid2[0] : menc_sticker || null : menc_prt || menc_sticker
-const menc_jid = normalizar(menc_os2 || sender)
+const menc_jid = await normalizar(menc_os2 || sender)
 const sender_ou_n = temMention ? menc_jid2?.[0] || menc_sticker || sender : menc_prt || menc_sticker || sender
 const numClean = txt => String(txt || '').replace(/[()+\-\/\s]/g, '') + '@s.whatsapp.net'
-const mrc_ou_numero = qSeguro.length > 6 && !temMention ? numClean(qSeguro) : normalizar(menc_prt || menc_sticker || sender)
-const marc_tds = temMention ? normalizar(menc_jid) : qSeguro.length > 6 && !temMention ? numClean(qSeguro) : normalizar(menc_prt || menc_sticker || sender)
-const menc_prt_nmr = qSeguro.length > 12 && !temMention ? numClean(qSeguro) : normalizar(menc_prt || menc_sticker || sender)
+const mrc_ou_numero = qSeguro.length > 6 && !temMention ? numClean(qSeguro) : await normalizar(menc_prt || menc_sticker || sender)
+const marc_tds = temMention ? await normalizar(menc_jid) : qSeguro.length > 6 && !temMention ? numClean(qSeguro) : await normalizar(menc_prt || menc_sticker || sender)
+const menc_prt_nmr = qSeguro.length > 12 && !temMention ? numClean(qSeguro) : await normalizar(menc_prt || menc_sticker || sender)
 
 //////////////////////////====//////////////////////////////////
 
@@ -530,13 +674,259 @@ ${colors.cyan('| 💬 CHAT:')} ${branco(`${chatType} ${groupInfo}`)}
 ${colors.cyan('| 📨 TIPO:')} ${branco(msgType)}
 ${colors.cyan('| 📝 CONTEÚDO:')} ${branco(msgContent)}
 ${colors.cyan('| 🕒 HORA:')} ${branco(dataHoraBR)}
-${colors.cyan('╰──. ݁ ⛧ ₊ ⊹ 🧊 . ݁ ˖ ❆ິ̸ . ݁──╯')}`
+${colors.cyan('╰──. ݁ ⛧ ₊ ⊹ 🎀 . ݁ ˖ ❆ິ̸ . ݁──╯')}`
 )
+
+// VERIFICAÇÃO DE MUTE
+if (isGroup && !SoDono && !isGroupAdmins && !isBotGroupAdmins) {
+const muted = isMuted(sender)
+if (muted) {
+const tempoRestante = muted.expiraEm ? Math.ceil((muted.expiraEm - Date.now()) / 60000) + ' minutos' : 'PERMANENTE'
+await tokito.sendMessage(from, {
+delete: { stanzaId: info.key.id, remoteJid: from, fromMe: false }
+})
+return reply(`🔇 *MUTED*\n\n👤 @${sender.split('@')[0]}\n⏰ Tempo restante: *${tempoRestante}*\n\n*Você está em mute. Não pode enviar mensagens.`)
+}
+}
+
+
+
+// === AURORA AI - ATENDIMENTO EM GRUPO (EXECUÇÃO INTERNA) ===
+if (isGroup && !info.key.fromMe && !isCmd) {
+  const mencionaAurora = body.toLowerCase().includes('aurora') || 
+                         (ctxMsg?.mentionedJid?.length > 0 && ctxMsg.mentionedJid.some(jid => jid.includes(tokito.user.id.split(':')[0])))
+  
+  if (mencionaAurora && responderAurora) {
+    const resposta = responderAurora(tokito, from, sender, body, isGroup, isGroupAdmins, SoDono, prefix, reply, normalizar)
+
+    if (!resposta) continue
+    
+    if (resposta?.type === 'execute') {
+      const cmd = resposta.command
+      const args = resposta.args
+      
+      // Prioridade: args (número/mensagem após o comando) > menção > sender
+      let targetRaw = args?.trim() || ''
+      
+      // Se não tem args, verifica menção
+      if (!targetRaw && menc_os2) {
+        targetRaw = String(menc_os2)
+      }
+      
+      // Se ainda não tem target, pede para marcar a pessoa
+      if (!targetRaw) {
+        return await reply(`⚠️ *Comando ${cmd.toUpperCase()} identificado, mas preciso de um alvo!*\n\nMarque o usuário ou digite o número.`)
+      }
+      
+      let target = String(targetRaw)
+      
+      // 1. Limpar palavras de ligação e manter lid_ intacto para resolução posterior
+      const palavras = target.split(/\s+/)
+      let textoLimpo = ''
+      for (const palavra of palavras) {
+        if (['no', 'na', 'nos', 'nas', 'para', 'pelo', 'pela', 'pelos', 'pelas', 'em', 'do', 'da', 'dos', 'das', 'de', 'a', 'o', 'os', 'as', 'com', 'sem'].includes(palavra.toLowerCase())) continue
+        if (palavra.startsWith('@')) textoLimpo += palavra.slice(1) + ' '
+        else textoLimpo += palavra + ' '
+      }
+      target = textoLimpo.trim()
+      
+      // 2. Resolver marcador "lid_<id>" para número real, usando o mapeamento oficial
+      // (nunca fabricar telefone a partir dos dígitos do lid)
+      const lidMatch = target.match(/^lid_(\d+)(?::\d+)?$/)
+      if (lidMatch) {
+        const lidJid = jidNormalizedUser(`${lidMatch[1]}@lid`)
+        const metadata = isGroup ? groupMetadata : await pegarMetadata(tokito, from)
+        target = await resolverParticipanteParaPn(tokito, lidJid, metadata?.participants)
+      }
+      // 3. Se ainda tem @, normalizar
+      else if (target.includes('@')) {
+        try { target = await normalizar(target, isGroup ? groupMetadata : null) } catch {}
+      }
+      // 4. Se é só número, formatar
+      else {
+        const numLimpo = target.replace(/\D/g, '')
+        if (numLimpo.length >= 10) {
+          target = numLimpo + '@s.whatsapp.net'
+        }
+      }
+
+      // 5. Validação final
+      if (!target || target === '@s.whatsapp.net') {
+        return await reply('⚠️ Não consegui identificar o usuário. Marque a pessoa ou digite o número corretamente.')
+      }
+
+      try {
+        if (cmd === 'mute') {
+          if (!target) return await reply('⚠️ Marque o usuário ou digite o número para mutar.')
+          if (numerodono.includes(target)) return await reply('❌ Não posso mutar os donos.')
+          const mutes = lerMutes()
+          mutes[target] = { expiraEm: null, mutedPor: sender, tempo: 'PERMANENTE' }
+          salvarMutes(mutes)
+          return await reply(`🔇 *MUTE APLICADO!*
+
+👤 @${target.split('@')[0]}
+⏰ Tempo: *PERMANENTE*
+👮 Muted por: @${sender.split('@')[0]}
+
+_O usuário não poderá enviar mensagens até que você use /demute._`, [target, sender])
+        }
+
+        if (cmd === 'demute') {
+          if (!target) return await reply('⚠️ Marque o usuário para desmutar.')
+          const mutes = lerMutes()
+          delete mutes[target]
+          salvarMutes(mutes)
+          return await reply(`✅ *DESMUTE APLICADO!*
+
+👤 @${target.split('@')[0]}
+
+_O usuário pode enviar mensagens novamente._`, [target])
+        }
+
+        if (cmd === 'ban') {
+          if (!target) return await reply('⚠️ Marque o usuário para banir.')
+          if (numerodono.includes(target)) return await reply('❌ Não posso banir os donos.')
+          await tokito.groupParticipantsUpdate(from, [target], 'remove')
+          return await reply(`🚫 *BANIDO!*
+
+👤 @${target.split('@')[0]}
+
+_O usuário foi removido do grupo._`, [target])
+        }
+
+        if (cmd === 'promover') {
+          if (!target) return await reply('⚠️ Marque o usuário para promover.')
+          await tokito.groupParticipantsUpdate(from, [target], 'promote')
+          return await reply(`✅ *PROMOVIDO!*
+
+👤 @${target.split('@')[0]}
+
+_O usuário agora é administrador._`, [target])
+        }
+
+        if (cmd === 'rebaixar') {
+          if (!target) return await reply('⚠️ Marque o usuário para rebaixar.')
+          await tokito.groupParticipantsUpdate(from, [target], 'demote')
+          return await reply(`🔻 *REBAIXADO!*
+
+👤 @${target.split('@')[0]}
+
+_O usuário não é mais administrador._`, [target])
+        }
+
+        if (cmd === 'fechargp') {
+          const hora = String(args || '').trim()
+          if (!hora) return await reply('⚠️ Digite a hora para fechar (ex: 23:00).')
+          const grupos = ler()
+          grupos[from] = { ...grupos[from], ativo: true, fechar: hora, fecharmidia: null, ultimoFechamento: null }
+          salvar(grupos)
+          return await reply(`🔒 *GRUPO FECHADO ÀS ${hora}*
+
+_O grupo será fechado automaticamente às ${hora}._`)
+        }
+
+        if (cmd === 'abrirgp') {
+          const hora = String(args || '').trim()
+          if (!hora) return await reply('⚠️ Digite a hora para abrir (ex: 08:00).')
+          const grupos = ler()
+          grupos[from] = { ...grupos[from], ativo: true, abrir: hora, abrirmidia: null, ultimaAbertura: null }
+          salvar(grupos)
+          return await reply(`🔓 *GRUPO ABERTO ÀS ${hora}*
+
+_O grupo será aberto automaticamente às ${hora}._`)
+        }
+
+        if (cmd === 'bloqueargp') {
+          if (!args) return await reply('⚠️ Marque o grupo ou digite o ID para bloquear.')
+          const grupos = ler()
+          delete grupos[target || from]
+          salvar(grupos)
+          return await reply(`🔒 *GRUPO BLOQUEADO!*
+
+_O bot não poderá mais ser usado neste grupo._`)
+        }
+
+        if (cmd === 'liberargp') {
+          const grupos = ler()
+          grupos[from] = { liberado: true, liberadoPor: sender, liberadoEm: new Date().toISOString() }
+          salvar(grupos)
+          return await reply(`✅ *GRUPO LIBERADO!*
+
+_O bot agora pode ser usado neste grupo._`)
+        }
+
+        if (cmd === 'antipv') {
+          const valor = (args || '').toLowerCase()
+          if (valor === 'on' || valor === 'ativar' || valor === 'ligar') {
+            nescessario.antipv = true
+            fs.writeFileSync('./DADOS_TOKITO/INFO_DADOS/nescessario.json', JSON.stringify(nescessario, null, 2))
+            return await reply('✅ *ANTI-PV ATIVADO!*\n\n_O bot irá bloquear automaticamente qualquer usuário que enviar mensagem no privado._')
+          } else if (valor === 'off' || valor === 'desativar' || valor === 'desligar') {
+            nescessario.antipv = false
+            fs.writeFileSync('./DADOS_TOKITO/INFO_DADOS/nescessario.json', JSON.stringify(nescessario, null, 2))
+            return await reply('❌ *ANTI-PV DESATIVADO!*\n\n_O bot parou de bloquear mensagens no privado._')
+          }
+          return await reply('⚠️ Use: on ou off')
+        }
+
+        if (cmd === 'bon' || cmd === 'boton') {
+          nescessario.botoff = false
+          fs.writeFileSync('./DADOS_TOKITO/INFO_DADOS/nescessario.json', JSON.stringify(nescessario, null, 2))
+          return await reply('🟢 *BOT ATIVADO!*\n\n_Todos os comandos estão funcionando novamente._')
+        }
+
+        if (cmd === 'botoff') {
+          nescessario.botoff = true
+          fs.writeFileSync('./DADOS_TOKITO/INFO_DADOS/nescessario.json', JSON.stringify(nescessario, null, 2))
+          return await reply('🔴 *BOT DESLIGADO!*\n\n_Os membros e admins não poderão mais usar comandos._')
+        }
+
+        if (cmd === 'reiniciar' || cmd === 'r') {
+          await reply('🔄 *REINICIANDO...* 🙇‍♂️')
+          setTimeout(() => process.exit(0), 2000)
+          return
+        }
+
+        await reply(`⚠️ *Comando ${cmd} identificado, mas a lógica de execução interna ainda não está implementada para este comando específico.*`)
+
+      } catch (error) {
+        console.error('[AURORA EXEC] Erro:', error)
+        await reply('❌ Erro ao executar o comando internamente.')
+      }
+    }
+    else if (resposta?.text) {
+      await reply(resposta.text, [sender])
+    }
+
+    continue
+  }
+}
+// ====================================================
+
+// VERIFICAÇÃO ANTI-DIVULGAÇÃO
+if (isGroup && !SoDono && !isGroupAdmins && checarAntiDivulgacao(mensagem, sender, from)) {
+await tokito.sendMessage(from, {
+delete: { stanzaId: info.key.id, remoteJid: from, fromMe: false }
+})
+
+try {
+await tokito.groupParticipantsUpdate(from, [sender], 'remove')
+} catch {}
+
+await tokito.sendMessage(from, {
+text: `🚫 *DIVULGAÇÃO DETECTADA!*
+
+👤 @${sender.split('@')[0]}
+🔨 Usuário banido por divulgar outros grupos ou canais.
+⚠️ Não é permitido divulgar outros grupos ou canais.`,
+contextInfo: { mentionedJid: [sender] }
+}, { quoted: selo })
+}
 
 if (!isCmd) continue
 if(isBotoff && !SoDono) return
 
-const yoshMenu = async(texto, emoji = '🧊') => {
+const yoshMenu = async(texto, emoji = '🎀') => {
 await reagir(from, emoji)
 
 const caminhoVideo = path.join(__dirname, 'DADOS_TOKITO', 'INFO_DADOS', 'LOGOS', 'fotomenu.mp4')
@@ -721,7 +1111,7 @@ if (!SoDono) return reply(mess.onlyOwner())
 let alvo = menc_os2 || menc_prt || String(q || '')
 if (Array.isArray(alvo)) alvo = alvo[0]
 
-alvo = normalizar(alvo)
+alvo = await normalizar(alvo)
 
 let numero = String(alvo || '').split('@')[0].replace(/\D/g, '')
 if (!numero) numero = String(q || '').replace(/\D/g, '')
@@ -1009,7 +1399,7 @@ const numero = String(alvo).replace(/\D/g, '')
 alvo = numero ? `${numero}@s.whatsapp.net` : ''
 }
 
-alvo = normalizar(alvo)
+alvo = await normalizar(alvo)
 if (!alvo) return reply(mess.marque())
 if (alvo === botNumber) return reply(mess.nobot())
 if (numerodono.includes(alvo)) return reply(mess.nodono())
@@ -1042,10 +1432,10 @@ const numero = String(alvo).replace(/\D/g, '')
 alvo = numero ? `${numero}@s.whatsapp.net` : ''
 }
 
-alvo = normalizar(alvo)
+alvo = await normalizar(alvo)
 if (!alvo) return reply(mess.marque())
 
-const admins = groupAdmins.map(i => normalizar(i))
+const admins = await Promise.all(groupAdmins.map(i => normalizar(i)))
 if (admins.includes(alvo)) return reply(mess.jaadm())
 
 await tokito.groupParticipantsUpdate(from, [alvo], 'promote')
@@ -1076,12 +1466,12 @@ const numero = String(alvo).replace(/\D/g, '')
 alvo = numero ? `${numero}@s.whatsapp.net` : ''
 }
 
-alvo = normalizar(alvo)
+alvo = await normalizar(alvo)
 if (!alvo) return reply(mess.marque())
 if (alvo === botNumber) return reply(mess.nobot())
 if (numerodono.includes(alvo)) return reply(mess.nodono())
 
-const admins = groupAdmins.map(i => normalizar(i))
+const admins = await Promise.all(groupAdmins.map(i => normalizar(i)))
 if (!admins.includes(alvo)) return reply(mess.naoadm())
 
 await tokito.groupParticipantsUpdate(from, [alvo], 'demote')
@@ -1100,7 +1490,7 @@ break
 
 case 'menu': {
 try {
-await reagir(from, '🧊')
+await reagir(from, '🎀')
 
 const caminhoVideo = path.join(__dirname, 'DADOS_TOKITO', 'INFO_DADOS', 'LOGOS', 'fotomenu.mp4')
 const caminhoImagem = path.join(__dirname, 'DADOS_TOKITO', 'INFO_DADOS', 'LOGOS', 'fotomenu.png')
@@ -1118,17 +1508,17 @@ temVideo ? { video: { url: caminhoVideo }, mimetype: 'video/mp4', gifPlayback: t
 )
 
 const listaMenus = {
-title: '🧊⃞ ᴍᴇɴᴜ-ʟɪsᴛᴀs ⃞🧊',
+title: '🎀⃞ 𝓜𝓮𝓷𝓾-𝓛ɪ𝓼𝓽ᴀ𝓼 ⃞🎀',
 sections: [{
-title: '🧊⃞ ᴇsᴄᴏʟʜᴀ ᴜᴍ ᴍᴇɴᴜ ⃞🧊',
+title: '🎀⃞ 𝓔𝓼𝓬𝓸𝓵𝓱ᴀ 𝓾𝓶 𝓜𝓮𝓷𝓾 ⃞🎀',
 rows: [
-{ title: '🧊⃞ ᴍᴇɴᴜ ᴘʀɪɴᴄɪᴘᴀʟ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴏs ᴄᴏᴍᴀɴᴅᴏs ᴘʀɪɴᴄɪᴘᴀɪs, ʀᴀɴᴅᴏᴍ ᴇ ᴅᴏᴡɴʟᴏᴀᴅs.', id: `${prefix}menuzz` },
-{ title: '🧊⃞ ᴍᴇɴᴜ ᴀᴅᴍ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴏs ᴄᴏᴍᴀɴᴅᴏs ᴅᴇ ᴀᴅᴍɪɴɪsᴛʀᴀᴄᴀᴏ ᴅᴏ ɢʀᴜᴘᴏ.', id: `${prefix}menuadm` },
-{ title: '🧊⃞ ᴍᴇɴᴜ ᴅᴏɴᴏ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴏs ᴄᴏᴍᴀɴᴅᴏs ᴇxᴄʟᴜsɪᴠᴏs ᴅᴏ ᴅᴏɴᴏ.', id: `${prefix}menudono` },
-{ title: '🧊⃞ ᴘɪɴɢ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴀ ᴠᴇʟᴏᴄɪᴅᴀᴅᴇ ᴇ ᴏ ᴅᴇsᴇᴍᴘᴇɴʜᴏ ᴅᴏ ʙᴏᴛ.', id: `${prefix}ping` },
-{ title: '🧊⃞ ᴄʀɪᴀᴅᴏʀ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴀs ɪɴғᴏʀᴍᴀᴄᴏᴇs ᴇ ᴏ ᴄᴏɴᴛᴀᴛᴏ ᴅᴏ ᴄʀɪᴀᴅᴏʀ.', id: `${prefix}criador` },
-{ title: '🧊⃞ ᴅᴏɴᴏs ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴛᴏᴅᴏs ᴏs ᴅᴏɴᴏs ᴄᴀᴅᴀsᴛʀᴀᴅᴏs ɴᴏ ʙᴏᴛ.', id: `${prefix}donos` },
-{ title: '🧊⃞ ʟɪsᴛᴀ ᴠɪᴘ ⃞🧊', description: 'ᴍᴏsᴛʀᴀ ᴛᴏᴅᴏs ᴏs ᴜsᴜᴀʀɪᴏs ᴠɪᴘ ᴄᴀᴅᴀsᴛʀᴀᴅᴏs.', id: `${prefix}viplist` }
+{ title: '🎀⃞ 𝓜𝓮𝓷𝓾 𝓟ʀɪ𝓷𝓬ɪᴘᴀʟ ⃞🎀', description: '𝓜𝓸𝓼𝓽ʀᴀ 𝓞𝓼 𝓒𝓸𝓶ᴀ𝓷𝓭𝓸𝓼 𝓟ʀɪ𝓷𝓬ɪᴘᴀɪ𝓼, 𝓡ᴀ𝓷𝓭𝓸𝓶 𝓔 𝓓𝓸𝔀𝓷𝓵𝓸ᴀ𝓭𝓼.', id: `${prefix}menuzz` },
+{ title: '🎀⃞ 𝓜𝓮𝓷𝓾 𝓐𝓭𝓶 ⃞🎀', description: '𝓜𝓸𝓼𝓽ʀᴀ 𝓞𝓼 𝓒𝓸𝓶ᴀ𝓷𝓭𝓸𝓼 𝓓𝓮 𝓐𝓓𝓜ɪɴɪ𝓢𝓽ʀᴀᴄᴀᴏ 𝓓𝓞 𝓖ʀᴜᴘ𝓞.', id: `${prefix}menuadm` },
+{ title: '🎀⃞ 𝓜𝓮𝓷𝓾 𝓓𝓸𝓷ᴀ ⃞🎀', description: '𝓜𝓸𝓼𝓽ʀᴀ 𝓞𝓼 𝓒𝓸𝓶ᴀ𝓷𝓭𝓸𝓼 𝓔𝔁𝓒𝓵𝓾𝓼ɪᴠ𝓸𝓼 𝓓𝓮 𝓓𝓞𝓝ᴀ.', id: `${prefix}menudono` },
+{ title: '🎀⃞ 𝓟ɪ𝓷ɢ ⃞🎀', description: '𝓜𝓸𝓼𝓽ʀᴀ ᴀ 𝓥𝓮𝓵𝓸ᴄɪᴅᴀᴅ𝓮 𝓔 𝓞 𝓓𝓮𝓼𝓮𝓶ᴘᴇɴʜ𝓞 𝓓𝓮 𝓓𝓞 𝓑𝓸𝓽.', id: `${prefix}ping` },
+{ title: '🎀⃞ 𝓒ʀɪᴀᴅ𝓞ʀ ⃞🎀', description: '𝓜𝓸𝓼𝓽ʀᴀ ᴀ𝓼 𝓘𝓷𝓯𝓸ʀ𝓶ᴀᴄõ𝓮𝓼 𝓔 𝓞 𝓒𝓸𝓷𝓽ᴀ𝓽𝓞 𝓓𝓮 𝓓𝓞 𝓒ʀɪᴀᴅ𝓞ʀ.', id: `${prefix}criador` },
+{ title: '🎀⃞ 𝓓𝓸𝓷ᴀ𝓼 ⃞🎀', description: '𝓜𝓸𝓼𝓽ʀᴀ 𝓣𝓞𝓭𝓞𝓼 𝓐𝓼 𝓓𝓞𝓝ᴀ𝓼 𝓒ᴀᴅᴀ𝓼𝓽ʀᴀᴅ𝓞𝓼 𝓝𝓞 𝓑𝓞𝓽.', id: `${prefix}donos` },
+{ title: '🎀⃞ 𝓛ɪ𝓼𝓽ᴀ 𝓥ɪᴘ ⃞🎀', description: '𝓜𝓸𝓼𝓽ʀᴀ 𝓣𝓞𝓭𝓞𝓼 𝓐𝓼 𝓤𝓼𝓾áʀɪ𝓞𝓼 𝓥ɪᴘ 𝓒ᴀᴅᴀ𝓼𝓽ʀᴀᴅ𝓞𝓼.', id: `${prefix}viplist` }
 ]
 }]
 }
@@ -1141,15 +1531,15 @@ videoMessage: menuMedia.videoMessage
 },
 headerType: 'VIDEO',
 body: {
-text: `❪🧊.ꯧᴍᴇɴᴜ ʟɪsᴛꯧ⸼🧊❫
+text: `❪🎀.ꯧᴍᴇɴᴜ ʟɪsᴛꯧ⸼🎀❫
 ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
-├⊹ 🧊 ʙᴏᴛ: ${NomeDoBot}
-├⊹ 🧊 ᴄʀɪᴀᴅᴏʀ: ${ownerName}
-├⊹ 🧊 ᴜsᴜᴀʀɪᴏ: ${pushname}
-├⊹ 🧊 ᴄᴀʀɢᴏ: ${isCargo}
-├⊹ 🧊 ᴠɪᴘ: ${isChVip}
-├⊹ 🧊 ᴅɪsᴘᴏsɪᴛɪᴠᴏ: ${whatIsPhone}
-├⊹ 🧊 ʙᴀɪʟᴇʏs: ${baileysVersion}
+├⊹ 🎀 ʙᴏᴛ: ${NomeDoBot}
+├⊹ 🎀 ᴄʀɪᴀᴅᴏʀ: ${ownerName}
+├⊹ 🎀 ᴜsᴜᴀʀɪᴏ: ${pushname}
+├⊹ 🎀 ᴄᴀʀɢᴏ: ${isCargo}
+├⊹ 🎀 ᴠɪᴘ: ${isChVip}
+├⊹ 🎀 ᴅɪsᴘᴏsɪᴛɪᴠᴏ: ${whatIsPhone}
+├⊹ 🎀 ʙᴀɪʟᴇʏs: ${baileysVersion}
 ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛`
 },
 footer: { text: 'ᴇsᴄᴏʟʜᴀ ᴜᴍᴀ ᴏᴘᴄᴀᴏ ᴀʙᴀɪxᴏ' },
@@ -1170,7 +1560,7 @@ participant: selo.key.participant || selo.key.remoteJid,
 quotedMessage: selo.message,
 mentionedJid: [sender]
 },
-body: { text: `*🧊⃞ ᴀǫᴜɪ ᴇsᴛᴀ sᴇᴜ ᴍᴇɴᴜ ⃞🧊*` },
+body: { text: `*🎀⃞ ᴀǫᴜɪ ᴇsᴛᴀ sᴇᴜ ᴍᴇɴᴜ ⃞🎀*` },
 footer: { text: '' },
 carouselMessage: {
 cards: [{
@@ -1179,15 +1569,15 @@ hasMediaAttachment: true,
 videoMessage: menuMedia.videoMessage || menuMedia.imageMessage
 },
 body: {
-text: `❪🧊.ꯧᴍᴇɴᴜ ʟɪsᴛꯧ⸼🧊❫
+text: `❪🎀.ꯧᴍᴇɴᴜ ʟɪsᴛꯧ⸼🎀❫
 ┏☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┓
-├⊹ 🧊 ʙᴏᴛ: ${NomeDoBot}
-├⊹ 🧊 ᴄʀɪᴀᴅᴏʀ: ${ownerName}
-├⊹ 🧊 ᴜsᴜᴀʀɪᴏ: ${pushname}
-├⊹ 🧊 ᴄᴀʀɢᴏ: ${isCargo}
-├⊹ 🧊 ᴠɪᴘ: ${isChVip}
-├⊹ 🧊 ᴅɪsᴘᴏsɪᴛɪᴠᴏ: ${whatIsPhone}
-├⊹ 🧊 ʙᴀɪʟᴇʏs: ${baileysVersion}
+├⊹ 🎀 ʙᴏᴛ: ${NomeDoBot}
+├⊹ 🎀 ᴄʀɪᴀᴅᴏʀ: ${ownerName}
+├⊹ 🎀 ᴜsᴜᴀʀɪᴏ: ${pushname}
+├⊹ 🎀 ᴄᴀʀɢᴏ: ${isCargo}
+├⊹ 🎀 ᴠɪᴘ: ${isChVip}
+├⊹ 🎀 ᴅɪsᴘᴏsɪᴛɪᴠᴏ: ${whatIsPhone}
+├⊹ 🎀 ʙᴀɪʟᴇʏs: ${baileysVersion}
 ┗☆∻∹⋰ ★∻∹⋰ ☆∻∹⋰ ★∻∹⋰┛`
 },
 footer: { text: 'ᴇsᴄᴏʟʜᴀ ᴜᴍᴀ ᴏᴘᴄᴀᴏ ᴀʙᴀɪxᴏ' },
@@ -1318,15 +1708,18 @@ quoted: selo
 })
 }
 
+try {
+const resAudio = await axios.get(download, { responseType: 'arraybuffer', headers: { 'User-Agent': 'Mozilla/5.0' } })
+const audioBuffer = Buffer.from(resAudio.data)
 await tokito.sendMessage(from, {
-audio: { url: download },
+audio: audioBuffer,
 mimetype: 'audio/mpeg',
 ptt: false,
 fileName: nomeArquivo,
 contextInfo
 }, {
 quoted: selo
-})
+})} catch (e) { await reply('❌ Erro ao baixar o áudio.'); }
 
 await reagir(from, '✅')
 
@@ -1473,15 +1866,18 @@ const pesquisa = q.trim()
 const contextInfo = { ...newsletter, mentionedJid: [sender] }
 const apiUrl = `${API_URL}/api/youtube-audio?q=${encodeURIComponent(pesquisa)}&apikey=${encodeURIComponent(API_KEY_TOKITO)}`
 
+try {
+const resAudio = await axios.get(apiUrl, { responseType: 'arraybuffer', headers: { 'User-Agent': 'Mozilla/5.0' } })
+const audioBuffer = Buffer.from(resAudio.data)
 await tokito.sendMessage(from, {
-audio: { url: apiUrl },
+audio: audioBuffer,
 mimetype: 'audio/mpeg',
 fileName: 'audio.mp3',
 ptt: false,
 contextInfo
 }, {
 quoted: selo
-})
+})} catch (e) { await reply('❌ Erro ao baixar o áudio.'); }
 
 await reagir(from, '✅')
 
@@ -1510,8 +1906,11 @@ const pesquisa = q.trim()
 const contextInfo = { ...newsletter, mentionedJid: [sender] }
 const apiUrl = `${API_URL}/api/youtube-video?q=${encodeURIComponent(pesquisa)}&apikey=${encodeURIComponent(API_KEY_TOKITO)}`
 
+try {
+const resVideo = await axios.get(apiUrl, { responseType: 'arraybuffer', headers: { 'User-Agent': 'Mozilla/5.0' } })
+const videoBuffer = Buffer.from(resVideo.data)
 await tokito.sendMessage(from, {
-video: { url: apiUrl },
+video: videoBuffer,
 mimetype: 'video/mp4',
 fileName: 'video.mp4',
 caption: `*🎥 | ᴘʟᴀʏ ᴠɪᴅᴇᴏ*
@@ -1521,7 +1920,7 @@ caption: `*🎥 | ᴘʟᴀʏ ᴠɪᴅᴇᴏ*
 contextInfo
 }, {
 quoted: selo
-})
+})} catch (e) { await reply('❌ Erro ao baixar o vídeo.'); }
 
 await reagir(from, '✅')
 
@@ -1595,7 +1994,7 @@ if (!Number.isInteger(diasVip) || diasVip < 0) return reply(`*❌ | ɪɴғᴏʀ�
 
 let usur = menc_os2 || nmr
 if (Array.isArray(usur)) usur = usur[0]
-usur = normalizar(usur)
+usur = await normalizar(usur)
 if (!String(usur).includes('@')) usur = `${String(usur).replace(/\D/g, '')}@s.whatsapp.net`
 
 if (!usur || usur === '@s.whatsapp.net') return reply('*❌ | ɴᴀᴏ ғᴏɪ ᴘᴏssɪᴠᴇʟ ɪᴅᴇɴᴛɪғɪᴄᴀʀ ᴏ ᴜsᴜᴀʀɪᴏ.*')
@@ -1646,7 +2045,7 @@ if (!SoDono) return reply(mess.onlyOwner())
 
 let alvo = menc_os2 || String(q || '').replace(/\D/g, '')
 if (Array.isArray(alvo)) alvo = alvo[0]
-alvo = normalizar(alvo)
+alvo = await normalizar(alvo)
 if (!String(alvo).includes('@')) alvo = `${String(alvo).replace(/\D/g, '')}@s.whatsapp.net`
 
 if (!alvo || alvo === '@s.whatsapp.net') return reply(`*❌ | ᴍᴀʀǫᴜᴇ ᴏ ᴜsᴜᴀʀɪᴏ ᴏᴜ ᴅɪɢɪᴛᴇ ᴏ ɴᴜᴍᴇʀᴏ.*\n\n> ${prefix + command} @usuario`)
@@ -1834,7 +2233,7 @@ const codigo = fs.readFileSync(__filename, 'utf8')
 const casos = [...codigo.matchAll(/case\s+['"`]([^'"`]+)['"`]\s*:/g)].map(item => item[1])
 const comandos = [...new Set(casos)].filter(Boolean)
 
-await reply(`*🧊 | ᴛᴏᴛᴀʟ ᴅᴇ ᴄᴏᴍᴀɴᴅᴏs*
+await reply(`*🎀 | ᴛᴏᴛᴀʟ ᴅᴇ ᴄᴏᴍᴀɴᴅᴏs*
 
 *📦 | ᴇsᴛᴀ ʙᴀsᴇ ᴘᴏssᴜɪ:* ${comandos.length} ᴄᴏᴍᴀɴᴅᴏs
 *🤖 | ʙᴏᴛ:* ${NomeDoBot}
@@ -1857,11 +2256,13 @@ process.exit(0)
 }
 break
 
+// ║  por ESTE bloco inteiro (layout Aurora + imagem do card, 1 mensagem). ║
+// ╚══════════════════════════════════════════════════════════════════════╝
 case 'info':
 case 'player':
 case 'perfil': {
 try {
-if (!q) return reply(`Use: ${prefix}info <UID> [regiao]\n\nEx: ${prefix}info 123456789 BR`)
+if (!q) return reply(`Use: ${prefix}perfil <UID> [regiao]\n\nEx: ${prefix}perfil 123456789 BR`)
 
 const partes = q.trim().split(/\s+/)
 const uid = String(partes[0] || '').replace(/\D/g, '')
@@ -1872,48 +2273,105 @@ await reagir(from, '🔎')
 
 const API_KEY = 'permanente_fc5f4b82a52b482d2cdd'
 const BASE_URL = 'https://fluxggx.squareweb.app'
+const SISTEMA = 'Aurora System'
 
-const { data } = await axios.get(`${BASE_URL}/info-player?key=${API_KEY}&uid=${uid}&region=${region}`, { validateStatus: () => true })
+// 1) dados do jogador
+const { data } = await axios.get(`${BASE_URL}/info-player/texto?key=${API_KEY}&uid=${uid}&region=${region}`, { validateStatus: () => true, timeout: 30000 })
 
 if (!data || !data.success) {
 await reagir(from, '❌')
 return reply(`❌ *${data?.message || 'Jogador não encontrado'}*\n> Código: ${data?.error || 'ERRO'}`)
 }
 
-const b = data.data.basicInfo || {}
-const s = data.data.socialInfo || {}
-const dia = data.data.diamondCostRes || {}
-const cs = data.data.creditScoreInfo || {}
-const fmt = n => (n == null ? '—' : Number(n).toLocaleString('pt-BR'))
-const dataBR = ts => { const n = Number(ts); return n ? new Date(n * 1000).toLocaleDateString('pt-BR') : '—' }
+const p = data.player_info || {}
+const b = p.basic_info || {}
+const s = p.social_info || {}
+const c = p.clan_basic_info || {}
+const pet = p.pet_info || {}
+const dia = p.diamond_cost_res || {}
+const cs = p.credit_score_info || {}
 
-const info = `╭─────「 👤 *PERFIL FREE FIRE* 」
-│
-│  🏷️  *${b.nickname || 'Jogador'}*
-│  🆔  ${b.accountId || uid}
-│
-├─「 📊 *Conta* 」
-│  ⭐  Nível: *${b.level ?? '—'}*  ·  EXP: ${fmt(b.exp)}
-│  🌍  Região: *${b.region || region}*
-│  🎮  Versão: ${b.releaseVersion || '—'}
-│  📅  Criada: ${dataBR(b.createAt)}
-│
-├─「 🏆 *Ranking* 」
-│  🥇  BR: ${fmt(b.rank)}  ·  ${fmt(b.rankingPoints)} pts
-│  🎯  CS: ${fmt(b.csRank)}  (máx ${fmt(b.csMaxRank ?? b.maxRank)})
-│  🗓️  Temporada: ${b.seasonId ?? '—'}
-│
-├─「 💎 *Extras* 」
-│  💎  Diamantes gastos: ${fmt(dia.diamondCost)}
-│  🔰  Credit Score: ${cs.creditScore ?? '—'}
-│  ✍️  ${s.signature || 'Sem assinatura'}
-│
-╰─────「 ${NomeDoBot} 」`
+const limpo = t => String(t == null ? '' : t).replace(/[​-‏⁠ㅤﾠ឴឵]/g, ' ').replace(/\s+/g, ' ').trim()
+const fmt = n => (n == null || n === '' ? '—' : Number(String(n).replace(/\./g, '')).toLocaleString('pt-BR'))
+const soData = d => (String(d || '').split(' ')[0] || '—')
+const flag = ({ BR:'🇧🇷', US:'🇺🇸', SAC:'🇺🇸', NA:'🇺🇸', IND:'🇮🇳', BD:'🇧🇩', ID:'🇮🇩', ME:'🌍', VN:'🇻🇳', TH:'🇹🇭', PK:'🇵🇰', SG:'🇸🇬', EU:'🇪🇺', TW:'🇹🇼', CIS:'🌍' }[(b.region || region)] || '')
+const idioma = ({ Portugues:'Português', Ingles:'Inglês', Espanhol:'Espanhol', Frances:'Francês', Alemao:'Alemão' }[s.language] || s.language || '—')
+const sig = limpo(s.signature)
+
+const caption =
+`╭╌╌╌╌╌╌୨ 🎀 ୧╌╌╌╌╌╌╮
+        𝓕𝓻𝓮𝓮 𝓕𝓲𝓻𝓮 𝓟𝓻𝓸𝓯𝓲𝓵𝓮
+╰╌╌╌╌╌╌୨ 🤍 ୧╌╌╌╌╌╌╯
+
+୨୧ 👤 𝓝𝓲𝓬𝓴
+└➜ *${limpo(b.nickname) || 'Jogador'}*
+
+୨୧ 🆔 𝓘𝓓
+└➜ *${b.account_id || uid}*
+
+୨୧ 🌸 𝓘𝓷𝓯𝓸
+├♡ 🌍 Região • ${b.region || region} ${flag}
+├♡ 👤 Gênero • ${s.gender || '—'}
+├♡ 💬 Idioma • ${idioma}
+└♡ 🎮 ${s.mode_prefer || '—'}
+
+╭──────────────♡──────────────╮
+
+୨୧ ⭐ 𝓔𝓼𝓽𝓪𝓽í𝓼𝓽𝓲𝓬𝓪𝓼
+├♡ 🎖️ Nível • *${b.level ?? '—'}*
+├♡ 📈 EXP • *${fmt(b.exp)}*
+└♡ ❤️ Likes • *${fmt(b.liked)}*
+
+╰──────────────♡──────────────╯
+
+୨୧ 🏆 𝓡𝓪𝓷𝓴 𝓑𝓡
+├♡ Atual • ${b.rank || '—'}
+├♡ Máximo • ${b.max_rank || '—'}
+└♡ Pontos • ${fmt(b.ranking_points)}
+
+୨୧ ⚔️ 𝓡𝓪𝓷𝓴 𝓒𝓢
+├♡ Atual • ${b.cs_rank || '—'}
+├♡ Máximo • ${b.cs_max_rank || '—'}
+└♡ Pontos • ${fmt(b.cs_ranking_points)}
+
+୨୧ 👑 𝓒𝓵ã
+├♡ ${limpo(c.clan_name) || 'Sem clã'}
+├♡ Nível • ${c.clan_level ?? '—'}
+└♡ Membros • ${c.member_num ?? '—'}
+
+୨୧ 🐾 𝓟𝓮𝓽
+└♡ ${pet.id ? `${pet.id} • Lv.${pet.level ?? '—'}` : '—'}
+
+୨୧ 💎 𝓔𝔁𝓽𝓻𝓪𝓼
+├♡ Diamantes • ${fmt(dia.diamond_cost)}
+├♡ Credit Score • ${cs.credit_score ?? '—'}
+├♡ Criado • ${soData(b.create_at_date)}
+└♡ Último Login • ${soData(b.last_login_at_date)}
+${sig ? `\n✎ *${sig}*\n` : ''}
+╭────────── 🎀 ──────────╮
+     ✦ ${SISTEMA} ✦
+╰───────────────────────╯`
+
+// 2) imagem do card (skin profile)
+let imgBuf = null
+try {
+const card = await axios.get(`${BASE_URL}/info-player/card?key=${API_KEY}&uid=${uid}&region=${region}`, { responseType: 'arraybuffer', validateStatus: () => true, timeout: 60000 })
+const ct = String(card.headers['content-type'] || '')
+if (card.status === 200 && /^image\//i.test(ct)) imgBuf = Buffer.from(card.data)
+} catch {}
 
 await reagir(from, '✅')
-return reply(info)
+
+const contextInfo = { ...newsletter, mentionedJid: [sender] }
+
+// 3) imagem + texto numa mensagem só (se a imagem falhar, manda só o texto)
+if (imgBuf) {
+return tokito.sendMessage(from, { image: imgBuf, caption, contextInfo }, { quoted: selo })
+}
+return reply(caption)
+
 } catch (error) {
-console.error('Erro ao consultar info:', error.message)
+console.error('Erro ao consultar perfil:', error.message)
 await reagir(from, '❌').catch(() => {})
 return reply(`❌ Erro ao consultar jogador: ${error.message}`)
 }
@@ -1979,22 +2437,26 @@ if (!uid || uid.length < 6) return reply('❁ ┊ UID inválido, amora! Use apen
 const limiteInfo = checarLimiteLike(sender, isVip)
 if (!limiteInfo.permitido) {
 return reply(`╭┈┈┈❁˚ 🎀 ˚❁┈┈┈╮
-   *ʟɪᴍɪᴛᴇ ᴅɪᴀ́ʀɪᴏ ᴀᴛɪɴɢɪᴅᴏ*
+   *𝐋𝐈𝐌𝐈𝐓𝐄 𝐃𝐈𝐀𝐑𝐈𝐎 𝐀𝐓𝐈𝐍𝐆𝐈𝐃𝐎*
 ╰┈┈┈❁˚ 🎀 ˚❁┈┈┈╯
 
-✿ Poxa, ${isVip ? 'você já usou seus' : 'você já usou seu'} *${limiteInfo.limite}* ${limiteInfo.limite > 1 ? 'likes de hoje' : 'like de hoje'} 🥺💗
 
-${isVip ? '💎 Você já é *VIP*, volte amanhã pra mandar mais likes!' : `🔓 Quer mandar até *${LIMITE_LIKE_VIP}x* por dia? Vire *VIP* e libere mais likes, flor! 🌸`}
+𝑷𝒐𝒙𝒂, 𝒗𝒐𝒄𝒆 𝒋𝒂 𝒖𝒔𝒐𝒖 𝒔𝒆𝒖 𝒍𝒊𝒎𝒊𝒕𝒆 𝒅𝒊𝒂𝒓𝒊𝒐 😅
+𝑸𝒖𝒆 𝒕𝒂𝒍 𝒇𝒂𝒛𝒆𝒓 𝒐 𝒖𝒑𝒈𝒓𝒂𝒅𝒆 𝒑𝒂𝒓𝒂 𝒐 𝑽𝑰𝑷?
 
-╰────── ${NomeDoBot} ──────╯`)
+𝑪𝒐𝒎 𝒐 𝑽𝑰𝑷 𝒗𝒐𝒄𝒆 𝒄𝒐𝒏𝒔𝒆𝒈𝒖𝒆 𝒆𝒏𝒗𝒊𝒂𝒓 𝟑𝟎 𝑰𝑫𝒔 𝒑𝒐𝒓 𝒅𝒊𝒂!
+
+╰──────𝓐𝓾𝓻𝓸𝓻𝓪 𝓢𝔂𝓼𝓽𝓮𝓶 ──────╯
+`)
 }
 
+const startTime = Date.now();
 await reagir(from, '❤️')
 
 const API_KEY = 'permanente_fc5f4b82a52b482d2cdd'
 const BASE_URL = 'https://fluxggx.squareweb.app'
 
-const { data } = await axios.get(`${BASE_URL}/send-like?key=${API_KEY}&uid=${uid}&region=${region}&token=100`, { validateStatus: () => true })
+const { data } = await axios.get(`${BASE_URL}/send-like?key=${API_KEY}&uid=${uid}&region=${region}&token=350`, { validateStatus: () => true })
 
 if (!data || !data.sucesso) {
 await reagir(from, '⏳')
@@ -2017,32 +2479,32 @@ const c = (data.data && data.data.conta) || {}
 const L = (data.data && data.data.likes) || {}
 const fmt = n => (n == null ? '—' : Number(String(n).replace(/\./g, '')).toLocaleString('pt-BR'))
 
-// nível real (best-effort)
+// nível real (best-effort — usa endpoint leve /texto)
 let linhaNivel = ''
 try {
-const inf = await axios.get(`${BASE_URL}/info-player?key=${API_KEY}&uid=${uid}&region=${region}`, { validateStatus: () => true })
-const nivel = inf.data?.success ? (inf.data.data?.basicInfo?.level ?? null) : null
+const inf = await axios.get(`${BASE_URL}/info-player/texto?key=${API_KEY}&uid=${uid}&region=${region}`, { validateStatus: () => true })
+const nivel = inf.data?.success ? (inf.data.player_info?.basic_info?.level ?? null) : null
 if (nivel != null) linhaNivel = `\n│  ⭐  Nível: ${nivel}`
 } catch {}
 
-const info = `╭┈┈┈❁˚ 💗 ˚❁┈┈┈╮
-   *ʟɪᴋᴇs ᴇɴᴠɪᴀᴅᴏs* 🎀
-╰┈┈┈❁˚ 💗 ˚❁┈┈┈╯
+const tempo = ((Date.now() - startTime) / 1000).toFixed(2);
+const restante = isVip ? 'ILIMITADA' : `${limiteApos.restante}`;
+const percent = isVip ? '100%' : `${Math.round((limiteApos.usados / limiteApos.limite) * 100)}%`;
+const barra = isVip ? '██████████' : '░░░░░░░░░░';
 
-🏷️  *${c.nome_conta || data.nome || 'Jogador'}*
-🆔  ${uid}${linhaNivel}
-🌍  Região: ${c.region || region}
+const info = `🎀• 𝑳𝒊𝒌𝒆𝒔 𝑬𝒏𝒗𝒊𝒂𝒅𝒐𝒔 𝒄𝒐𝒎 𝑺𝒖𝒄𝒆𝒔𝒔𝒐!
 
-✿┈┈┈┈┈┈┈┈┈┈┈┈┈✿
-📊  Antes: ${fmt(L.antes)}
-➕  Enviados: *${fmt(L.enviadas)}*
-🚀  Depois: ${fmt(L.depois)}
-✿┈┈┈┈┈┈┈┈┈┈┈┈┈✿
+- *🏷️ | 𝑵𝑰𝑪𝑲:* \`ㅤ${c.nome_conta || data.nome || 'Jogador'}\`
+- *🆔 | 𝑼𝑰𝑫:* \`${uid}\`
+- *👍🏻 | 𝑳𝑰𝑲𝑬𝑺 𝑨𝑵𝑻𝑬𝑺:* \`${fmt(L.antes)}\`
+- *➕ | 𝑨𝑫𝑰𝑪𝑰𝑶𝑵𝑨𝑫𝑶𝑺:* \`${fmt(L.enviadas)}\`
+- *🏆 | 𝑳𝑰𝑲𝑬𝑺 𝑫𝑬𝑷𝑶𝑰𝑺:* \`${fmt(L.depois)}\`
+- *⏱️ | 𝑻𝑬𝑴𝑷𝑶:* \`${tempo}s\`
+- *👤 | 𝑺𝑶𝑳𝑰𝑪𝑰𝑻𝑨𝑫𝑶 𝑷𝑶𝑹:* \`@${sender.split('@')[0]}\`
 
-🎟️  ${isVip ? '💎 Status: VIP' : '🌷 Status: Membro'}
-📅  Usados hoje: *${limiteApos.usados}/${limiteApos.limite}*
-
-╰─「 ✅ _Enviado com carinho · ${NomeDoBot}_ 」`
+*🔋 | 𝑲𝑬𝒀*
+•  \`📦 | RESTANTE → ${restante}\`
+•  \`🔋 | → ${barra} ${percent}\``
 
 await reagir(from, '✅')
 return reply(info)
@@ -2123,8 +2585,8 @@ const buffer = await getFileBuffer(video || imagem, video ? 'video' : 'image')
 fs.writeFileSync(entrada, buffer)
 
 const cmd = video
-? `"${ffmpegBin}" -i "${entrada}" -vcodec libwebp -filter:v fps=fps=15 -lossless 0 -compression_level 6 -q:v 50 -loop 0 -preset default -an -vsync 0 -s 512:512 "${saida}"`
-: `"${ffmpegBin}" -i "${entrada}" -vcodec libwebp -filter:v scale=512:512:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:-1:-1:color=#00000000 -lossless 1 -q:v 100 "${saida}"`
+? `"${ffmpegBin}" -i "${entrada}" -t 5 -vf "fps=15,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=#00000000" -an -vsync vfr -pix_fmt yuva420p -crf 28 -b:v 200k "${saida}"`
+: `"${ffmpegBin}" -i "${entrada}" -vf "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:-1:-1:color=#00000000" -q:v 75 "${saida}"`
 
 exec(cmd, async (err) => {
 try {
@@ -2166,7 +2628,7 @@ if (!nome) return reply('❌ Informe o nome da guilda.')
 await reagir(from, '🔎')
 
 const KEY_FFS = 'ggx_e8aad50f78d8b41eb5382eb8fc2883640f17537d7d868e7b'
-const BASE_FFS = 'https://freefireservices.com'
+const BASE_FFS = 'https://freefireservices.pro'
 
 const { data } = await axios.get(`${BASE_FFS}/api/v1/guildas/search?name=${encodeURIComponent(nome)}&region=${region}&key=${KEY_FFS}`, { validateStatus: () => true })
 
@@ -2210,7 +2672,7 @@ if (!uid || uid.length < 6) return reply('❌ ID da guilda inválido! Use apenas
 await reagir(from, '🔎')
 
 const KEY_FFS = 'ggx_e8aad50f78d8b41eb5382eb8fc2883640f17537d7d868e7b'
-const BASE_FFS = 'https://freefireservices.com'
+const BASE_FFS = 'https://freefireservices.pro'
 
 const { data } = await axios.get(`${BASE_FFS}/api/v1/guildas/info?uid=${uid}&region=${region}&key=${KEY_FFS}`, { validateStatus: () => true })
 
@@ -2253,6 +2715,387 @@ return reply(`❌ Erro ao consultar guilda: ${error.message}`)
 }
 break
 
+case 'mute': {
+try {
+if (!isGroup) return reply('*❌ | Este comando só pode ser usado em grupos.*')
+if (!isGroupAdmins) return reply('*❌ | Apenas administradores podem usar este comando.*')
+if (!isBotGroupAdmins) return reply('*❌ | O bot precisa ser administrador do grupo.*')
+
+let alvo = menc_os2 || menc_prt || String(q || '')
+if (Array.isArray(alvo)) alvo = alvo[0]
+
+if (!String(alvo).includes('@')) {
+const numero = String(alvo).replace(/\D/g, '')
+alvo = numero ? `${numero}@s.whatsapp.net` : ''
+}
+
+alvo = await normalizar(alvo)
+if (!alvo) return reply('*❌ | Marque o usuário ou digite o número.*')
+if (alvo === botNumber) return reply('*❌ | Não posso mutar o próprio bot.*')
+if (numerodono.includes(alvo)) return reply('*❌ | Não é possível mutar os donos.*')
+
+const mutes = lerMutes()
+mutes[alvo] = { expiraEm: null, mutedPor: sender, tempo: 'PERMANENTE' }
+salvarMutes(mutes)
+
+await reply(`🔇 *MUTE APLICADO!*
+
+👤 @${alvo.split('@')[0]}
+⏰ Tempo: *PERMANENTE*
+👮 Muted por: @${sender.split('@')[0]}
+
+_O usuário não poderá enviar mensagens até que você use /demute._`, [alvo, sender])
+} catch(e) {
+console.log('Erro no mute:', e)
+await reply(mess.error())
+}
+}
+break
+
+case 'demute':
+case 'desmute': {
+try {
+if (!isGroup) return reply('*❌ | Este comando só pode ser usado em grupos.*')
+if (!isGroupAdmins) return reply('*❌ | Apenas administradores podem usar este comando.*')
+
+let alvo = menc_os2 || menc_prt || String(q || '')
+if (Array.isArray(alvo)) alvo = alvo[0]
+
+if (!String(alvo).includes('@')) {
+const numero = String(alvo).replace(/\D/g, '')
+alvo = numero ? `${numero}@s.whatsapp.net` : ''
+}
+
+alvo = await normalizar(alvo)
+if (!alvo) return reply('*❌ | Marque o usuário ou digite o número.*')
+
+const mutes = lerMutes()
+delete mutes[alvo]
+salvarMutes(mutes)
+
+await reply(`✅ *DESMUTE APLICADO!*
+
+👤 @${alvo.split('@')[0]}
+
+_O usuário pode enviar mensagens novamente._`, [alvo])
+} catch(e) {
+console.log('Erro no desmute:', e)
+await reply(mess.error())
+}
+}
+break
+
+case 'antidivulgacao':
+case 'antispam': {
+try {
+if (!isGroup) return reply('*❌ | Este comando só pode ser usado em grupos.*')
+if (!isGroupAdmins) return reply('*❌ | Apenas administradores podem usar este comando.*')
+
+const dados = ler()
+const grupo = dados[from] || {}
+
+if (q === 'on' || q === 'ligar' || q === 'ativar') {
+grupo.antidivulgacao = true
+salvar(dados)
+return reply(`✅ *ANTI-DIVULGAÇÃO ATIVADO!*
+
+_O bot irá detectar e remover mensagens com links de grupos, canais e números de telefone._`)
+} else if (q === 'off' || q === 'desligar' || q === 'desativar') {
+grupo.antidivulgacao = false
+salvar(dados)
+return reply(`❌ *ANTI-DIVULGAÇÃO DESATIVADO!*
+
+_O bot parou de detectar divulgação._`)
+} else {
+const status = grupo.antidivulgacao ? '✅ ATIVO' : '❌ INATIVO'
+return reply(`🛡️ *ANTI-DIVULGAÇÃO*
+
+📊 Status: *${status}*
+
+💡 Use:
+> ${prefix}antidivulgacao on - Ativar
+> ${prefix}antidivulgacao off - Desativar`)
+}
+
+} catch(e) {
+console.log('Erro no antidivulgacao:', e)
+await reply(mess.error())
+}
+}
+break
+
+case 'foto':
+case 'dp': {
+try {
+const alvo = menc_os2 || menc_prt || sender
+const nomeAlvo = ctxMsg.participant || info.pushName || pushname || 'Usuário'
+
+await reagir(from, '⏳')
+
+let fotoUrl = null
+try {
+fotoUrl = await tokito.profilePictureUrl(alvo, 'image')
+} catch {}
+
+if (!fotoUrl) {
+fotoUrl = 'https://i.imgur.com/8VePJ3G.png'
+}
+
+const response = await axios.get(fotoUrl, { responseType: 'arraybuffer' })
+const imageBuffer = Buffer.from(response.data, 'binary')
+
+const caption = `「 🖼️ 𝐀𝐕𝐀𝐓𝐀𝐑 」
+│
+│  👤 𝑼𝒔ú𝒂𝒓𝒊𝒐: @${String(alvo).split('@')[0].split(':')[0]}
+│  📱 𝑰𝑫: ${String(alvo).split('@')[0].split(':')[0]}
+│
+╰────── ✦ ${NomeDoBot} ✦ ──────╯`
+
+await tokito.sendMessage(from, {
+image: imageBuffer,
+caption: caption,
+contextInfo: { mentionedJid: [alvo] }
+}, { quoted: selo })
+
+await reagir(from, '✅')
+} catch (error) {
+console.error('Erro ao obter avatar:', error.message)
+await reagir(from, '❌').catch(() => {})
+try {
+    if (tokito?.user?.id) {
+        return reply(`❌ Erro ao obter avatar: ${error.message}`)
+    }
+} catch (e) {
+    // Conexão fechada ou em reconexão, ignorando para evitar crash
+}
+}
+}
+break
+
+case 'revelar':
+case 'ver': {
+try {
+// Função recursiva para encontrar viewOnceMessage em qualquer nível
+function encontrarViewOnce(msg, nivel = 0) {
+if (!msg || nivel > 10) return null
+
+// Verifica se é diretamente viewOnce
+if (msg.viewOnceMessage?.message) {
+const inner = msg.viewOnceMessage.message
+if (inner.imageMessage || inner.videoMessage) return inner
+return encontrarViewOnce(inner, nivel + 1)
+}
+if (msg.viewOnceMessageV2?.message) {
+const inner = msg.viewOnceMessageV2.message
+if (inner.imageMessage || inner.videoMessage) return inner
+return encontrarViewOnce(inner, nivel + 1)
+}
+if (msg.viewOnceMessageV2Extension?.message) {
+const inner = msg.viewOnceMessageV2Extension.message
+if (inner.imageMessage || inner.videoMessage) return inner
+return encontrarViewOnce(inner, nivel + 1)
+}
+
+// Verifica se está dentro de extendedTextMessage
+if (msg.extendedTextMessage?.quotedMessage) {
+const inner = msg.extendedTextMessage.quotedMessage
+return encontrarViewOnce(inner, nivel + 1)
+}
+
+// Verifica se está dentro de message
+if (msg.message) {
+return encontrarViewOnce(msg.message, nivel + 1)
+}
+
+// Verifica se é imageMessage ou videoMessage direto
+if (msg.imageMessage || msg.videoMessage) {
+return msg
+}
+
+return null
+}
+
+// Pega o contexto da mensagem marcada (reply)
+const ctx = info.message?.extendedTextMessage?.contextInfo ||
+            info.message?.stickerMessage?.contextInfo ||
+            info.message?.imageMessage?.contextInfo ||
+            info.message?.videoMessage?.contextInfo ||
+            info.message?.documentMessage?.contextInfo || {}
+
+// Tenta encontrar a mensagem marcada em diferentes estruturas
+let quoted = null
+
+// Estrutura 1: direct quotedMessage no contextInfo
+if (ctx.quotedMessage) {
+quoted = ctx.quotedMessage
+}
+// Estrutura 2: mensagem com extendedTextMessage e contextInfo
+else if (info.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
+quoted = info.message.extendedTextMessage.contextInfo.quotedMessage
+}
+// Estrutura 3: mensagem marcada dentro de uma resposta
+else if (info.message?.extendedTextMessage?.quotedMessage) {
+quoted = info.message.extendedTextMessage.quotedMessage
+}
+// Estrutura 4: tenta extrair da mensagem principal
+else {
+quoted = info.message
+}
+
+// Usa a função recursiva para encontrar a viewOnce
+const midia = encontrarViewOnce(quoted)
+
+if (!midia) {
+return reply('❌ *MARQUE UMA MENSAGEM DE VISUALIZAÇÃO ÚNICA (FOTO OU VÍDEO) PARA REVELAR.*\n\n> Exemplo: marque a msg e use ' + prefix + 'revelar')
+}
+
+await reagir(from, '⏳')
+
+const tipo = midia.seconds ? 'video' : 'image'
+const buffer = await getFileBuffer(midia, tipo)
+
+const caption = midia.imageMessage
+? `╭┈┈┈❁˚ 🎀 ˚❁┈┈┈╮
+   *📷 𝐅𝐎𝐓𝐎 𝐑𝐄𝐕𝐄𝐋𝐀𝐃𝐀*
+╰┈┈┈❁˚ 🎀 ˚❁┈┈┈╯
+
+👤 *𝑹𝒆𝒗𝒆𝒍𝒂𝒅𝒐 𝒑𝒐𝒓:* @${sender.split('@')[0]}
+🤖 *𝑩𝒐𝒕:* ${NomeDoBot}
+🕒 *𝑯𝒐𝒓𝒂:* ${horaBR}
+
+╰──────𝓐𝓾𝓻𝓸𝓻𝓪 𝓢𝔂𝓼𝓽𝓮𝓶 ──────╯`
+: `╭┈┈┈❁˚ 🎀 ˚❁┈┈┈╮
+   *🎥 𝐕𝐈𝐃𝐄𝐎 𝐑𝐄𝐕𝐄𝐋𝐀𝐃𝐎*
+╰┈┈┈❁˚ 🎀 ˚❁┈┈┈╯
+
+👤 *𝑹𝒆𝒗𝒆𝒍𝒂𝒅𝒐 𝒑𝒐𝒓:* @${sender.split('@')[0]}
+🤖 *𝑩𝒐𝒕:* ${NomeDoBot}
+🕒 *𝑯𝒐𝒓𝒂:* ${horaBR}
+
+╰──────𝓐𝓾𝓻𝓸𝓻𝓪 𝓢𝔂𝓼𝓽𝓮𝓶 ──────╯`
+
+await tokito.sendMessage(from, {
+[tipo]: buffer,
+caption,
+contextInfo: { ...newsletter, mentionedJid: [sender] }
+}, { quoted: selo })
+
+await reagir(from, '✅')
+} catch (error) {
+console.error('Erro ao revelar mídia:', error.message)
+await reagir(from, '❌').catch(() => {})
+return reply('❌ *ERRO AO REVELAR A MÍDIA.*\n> Verifique se é uma visualização única válida.')
+}
+}
+break
+
+case 'antipv': {
+try {
+if (!SoDono) return reply(mess.onlyOwner())
+
+if (q === 'on' || q === '1' || q === 'ligar' || q === 'ativar') {
+nescessario.antipv = true
+fs.writeFileSync('./DADOS_TOKITO/INFO_DADOS/nescessario.json', JSON.stringify(nescessario, null, 2))
+await reply('✅ *ANTI-PV ATIVADO!*\n\n_O bot irá bloquear automaticamente qualquer usuário que enviar mensagem no privado._')
+} else if (q === 'off' || q === '0' || q === 'desligar' || q === 'desativar') {
+nescessario.antipv = false
+fs.writeFileSync('./DADOS_TOKITO/INFO_DADOS/nescessario.json', JSON.stringify(nescessario, null, 2))
+await reply('❌ *ANTI-PV DESATIVADO!*\n\n_O bot parou de bloquear mensagens no privado._')
+} else {
+const status = nescessario.antipv ? '✅ ATIVO' : '❌ INATIVO'
+await reply(`🛡️ *ANTI-PV (ANTI-PRIVATE)*\n\n📊 Status: *${status}*\n\n💡 Use:\n> ${prefix}antipv on - Ativar\n> ${prefix}antipv off - Desativar`)}
+} catch(e) {
+console.log('Erro no antipv:', e)
+await reply(mess.error())
+}
+}
+break
+
+case 'liberargp': {
+try {
+if (!SoDono) return reply(mess.onlyOwner())
+
+if (!q) {
+return reply(`📋 *LIBERAR GRUPO*\n\n💡 Use:\n> ${prefix}liberargp <ID do grupo>`)}
+
+const groupId = q.includes('@g.us') ? q : `${q.replace(/[^0-9]/g, '')}@g.us`
+
+if (!groupId.includes('@g.us')) {
+return reply('❌ ID de grupo inválido!')}
+
+try {
+const meta = await tokito.groupMetadata(groupId)
+const grupos = ler()
+grupos[groupId] = { liberado: true, liberadoPor: sender, liberadoEm: new Date().toISOString() }
+salvar(grupos)
+
+await reply(`✅ *GRUPO LIBERADO!*\n\n👥 Grupo: ${meta?.subject || groupId}\n🔓 Liberado por: @${sender.split('@')[0]}\n\n_O bot agora pode ser usado neste grupo._`, [sender])
+} catch(e) {
+console.log('Erro ao liberar grupo:', e)
+await reply('❌ Grupo não encontrado ou ID inválido!')}
+} catch(e) {
+console.log('Erro no liberargp:', e)
+await reply(mess.error())
+}
+}
+break
+
+case 'bloqueargp': {
+try {
+if (!SoDono) return reply(mess.onlyOwner())
+
+if (!q) {
+return reply(`📋 *BLOQUEAR GRUPO*\n\n💡 Use:\n> ${prefix}bloqueargp <ID do grupo>`)}
+
+const groupId = q.includes('@g.us') ? q : `${q.replace(/[^0-9]/g, '')}@g.us`
+
+if (!groupId.includes('@g.us')) {
+return reply('❌ ID de grupo inválido!')}
+
+try {
+const meta = await tokito.groupMetadata(groupId)
+const grupos = ler()
+delete grupos[groupId]
+salvar(grupos)
+
+await reply(`🔒 *GRUPO BLOQUEADO!*\n\n👥 Grupo: ${meta?.subject || groupId}\n🔒 Bloqueado por: @${sender.split('@')[0]}\n\n_O bot não poderá mais ser usado neste grupo._`, [sender])
+} catch(e) {
+console.log('Erro ao bloquear grupo:', e)
+await reply('❌ Grupo não encontrado ou ID inválido!')}
+} catch(e) {
+console.log('Erro no bloqueargp:', e)
+await reply(mess.error())
+}
+}
+break
+
+case 'listagp': {
+try {
+if (!SoDono) return reply(mess.onlyOwner())
+
+const grupos = ler()
+const liberados = Object.keys(grupos).filter(id => grupos[id]?.liberado)
+
+if (!liberados.length) {
+return reply('📋 *LISTA DE GRUPOS*\n\n⚠️ Nenhum grupo liberado ainda.')}
+
+let lista = `📋 *GRUPOS LIBERADOS*\n\n🔓 Total: ${liberados.length}\n\n`
+for (const gp of liberados) {
+try {
+const meta = await tokito.groupMetadata(gp)
+const info = grupos[gp]
+lista += `┌─「 ${meta?.subject || gp} 」\n│ 🆔  ${gp}\n│ 👤 Liberado por: @${info?.liberadoPor?.split('@')[0] || 'Desconhecido'}\n│ 📅 Em: ${info?.liberadoEm ? new Date(info.liberadoEm).toLocaleString('pt-BR') : '—'}\n└─────────────\n\n`
+} catch {}
+}
+
+await reply(lista.trim())
+} catch(e) {
+console.log('Erro na listagp:', e)
+await reply(mess.error())
+}
+}
+break
+
 default: {
 await reply(mess.commandNotFound(prefix))
 }
@@ -2262,7 +3105,7 @@ break
 }
 
 } catch(erro) {
-console.log(colors.red('❌ erro ao reiniciar :('), erro)
+console.log(colors.red('❌ erro no handler de mensagem:'), erro)
 }
 }
 
