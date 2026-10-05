@@ -1994,56 +1994,27 @@ await reagir(from, '❤️')
 const API_KEY = 'permanente_fc5f4b82a52b482d2cdd'
 const BASE_URL = 'https://fluxggx.squareweb.app'
 
-const { data } = await axios.get(`${BASE_URL}/v1/like`, {
-params: { key: API_KEY, uid, region },
-validateStatus: () => true,
-timeout: 95000
-})
+const { data } = await axios.get(`${BASE_URL}/send-like?key=${API_KEY}&uid=${uid}&region=${region}&token=100`, { validateStatus: () => true })
 
 if (!data || !data.sucesso) {
 await reagir(from, '⏳')
-
-if (data && (data.codigo === 'ID_COOLDOWN' || data.libera_em)) {
-const volta = data.libera_em
-  ? new Date(data.libera_em).toLocaleString('pt-BR', { timeZone: fuso })
-  : '—'
+if (data && data.em_recarga) {
 return reply(`╭─────「 ⏳ *EM RECARGA* 」
 │
 │  🆔  ${uid}
-│  ⏰  Falta: *${data.tempo_restante || data.restante || '—'}*
-│  📅  Volta: ${volta}
+│  ⏰  Falta: *${data.restante || '—'}*
+│  📅  Volta: ${data.proxima_vez_br || '—'}
 │
 ╰─「 _Esse ID já recebeu likes hoje._ 」`)
 }
-
-const msgOperacional = String(data?.erro || data?.mensagem || data?.message || data?.error || '')
-if (data && (
-  data.codigo === 'POOL_CAPACITY_PRESSURE'
-  || data.aguardando === true
-  || /janela saudável da rotação|preservando a rotação|aguardando.*rotação/i.test(msgOperacional)
-)) {
-const seg = Math.max(15, Number(data.retry_after) || 60)
-return reply(`╭─────「 ⏳ *AGUARDANDO ENVIO* 」
-│
-│  🆔  ${uid}
-│  ⏱️  Nova tentativa: ~${seg}s
-│
-╰─「 _Pedido aguardando envio · sem erro vermelho._ 」`)
-}
-
-await reagir(from, '❌')
-return reply(`❌ *${data?.erro || data?.mensagem || data?.message || data?.error || 'Não foi possível enviar os likes.'}*`)
+return reply(`❌ *${data?.mensagem || data?.message || 'Não foi possível enviar os likes.'}*`)
 }
 
 registrarUsoLike(sender)
 const limiteApos = checarLimiteLike(sender, isVip)
 
-const c = { nome_conta: data.nick || data.nome || 'Jogador', region: data.regiao || region }
-const L = {
-antes: data.likes_antes,
-enviadas: data.likes_enviados,
-depois: data.likes_depois
-}
+const c = (data.data && data.data.conta) || {}
+const L = (data.data && data.data.likes) || {}
 const fmt = n => (n == null ? '—' : Number(String(n).replace(/\./g, '')).toLocaleString('pt-BR'))
 
 // nível real (best-effort)
