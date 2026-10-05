@@ -2464,54 +2464,27 @@ await reagir(from, '❤️')
 const API_KEY = 'permanente_fc5f4b82a52b482d2cdd'
 const BASE_URL = 'https://fluxggx.squareweb.app'
 
-const { data } = await axios.get(`${BASE_URL}/v1/like`, {
-params: { key: API_KEY, uid, region },
-validateStatus: () => true,
-timeout: 95000
-})
+const { data } = await axios.get(`${BASE_URL}/send-like?key=${API_KEY}&uid=${uid}&region=${region}&token=350`, { validateStatus: () => true })
 
 if (!data || !data.sucesso) {
 await reagir(from, '⏳')
-
-// Cooldown real do ID: o Auto System devolve ID_COOLDOWN + libera_em.
-if (data && (data.codigo === 'ID_COOLDOWN' || data.libera_em)) {
-const volta = data.libera_em
-  ? new Date(data.libera_em).toLocaleString('pt-BR', { timeZone: fuso })
-  : '—'
+if (data && data.em_recarga) {
 return reply(`╭─────「 ⏳ *EM RECARGA* 」
 │
 │  🆔  ${uid}
-│  ⏰  Falta: *${data.tempo_restante || data.restante || '—'}*
-│  📅  Volta: ${volta}
+│  ⏰  Falta: *${data.restante || '—'}*
+│  📅  Volta: ${data.proxima_vez_br || '—'}
 │
 ╰─「 _Esse ID já recebeu likes hoje._ 」`)
 }
-
-// Pressão da rotação NÃO é erro do ID e NÃO é limite diário.
-// O backend não cobrou uso e não abriu novo envio.
-if (data && (data.codigo === 'POOL_CAPACITY_PRESSURE' || data.aguardando === true)) {
-const seg = Math.max(15, Number(data.retry_after) || 60)
-return reply(`╭─────「 ⏳ *AGUARDANDO ENVIO* 」
-│
-│  🆔  ${uid}
-│  ⏱️  Nova tentativa: ~${seg}s
-│
-╰─「 _Nenhum uso foi cobrado._ 」`)
-}
-
-await reagir(from, '❌')
-return reply(`❌ *${data?.erro || data?.mensagem || data?.message || data?.error || 'Não foi possível enviar os likes.'}*`)
+return reply(`❌ *${data?.mensagem || data?.message || 'Não foi possível enviar os likes.'}*`)
 }
 
 registrarUsoLike(sender)
 const limiteApos = checarLimiteLike(sender, isVip)
 
-const c = { nome_conta: data.nick || data.nome || 'Jogador' }
-const L = {
-antes: data.likes_antes,
-enviadas: data.likes_enviados,
-depois: data.likes_depois
-}
+const c = (data.data && data.data.conta) || {}
+const L = (data.data && data.data.likes) || {}
 const fmt = n => (n == null ? '—' : Number(String(n).replace(/\./g, '')).toLocaleString('pt-BR'))
 
 // nível real (best-effort — usa endpoint leve /texto)
