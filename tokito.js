@@ -2501,6 +2501,7 @@ return reply(`╭─────「 ⏳ *AGUARDANDO ENVIO* 」
 
 await reagir(from, '❌')
 return reply(`❌ *${data?.erro || data?.mensagem || data?.message || data?.error || 'Não foi possível enviar os likes.'}*`)
+}
 
 registrarUsoLike(sender)
 const limiteApos = checarLimiteLike(sender, isVip)
