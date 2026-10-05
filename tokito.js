@@ -2016,14 +2016,19 @@ return reply(`╭─────「 ⏳ *EM RECARGA* 」
 ╰─「 _Esse ID já recebeu likes hoje._ 」`)
 }
 
-if (data && (data.codigo === 'POOL_CAPACITY_PRESSURE' || data.aguardando === true)) {
+const msgOperacional = String(data?.erro || data?.mensagem || data?.message || data?.error || '')
+if (data && (
+  data.codigo === 'POOL_CAPACITY_PRESSURE'
+  || data.aguardando === true
+  || /janela saudável da rotação|preservando a rotação|aguardando.*rotação/i.test(msgOperacional)
+)) {
 const seg = Math.max(15, Number(data.retry_after) || 60)
 return reply(`╭─────「 ⏳ *AGUARDANDO ENVIO* 」
 │
 │  🆔  ${uid}
 │  ⏱️  Nova tentativa: ~${seg}s
 │
-╰─「 _Nenhum uso foi cobrado._ 」`)
+╰─「 _Pedido aguardando envio · sem erro vermelho._ 」`)
 }
 
 await reagir(from, '❌')
