@@ -2477,6 +2477,24 @@ return reply(`╭─────「 ⏳ *EM RECARGA* 」
 │
 ╰─「 _Esse ID já recebeu likes hoje._ 」`)
 }
+
+const aguardandoRotacao = data && (
+  data.codigo === 'POOL_CAPACITY_PRESSURE'
+  || (data.status === 'aguardando' && data.aguardando)
+  || /preservando a rotação|janela saudável da rotação/i.test(String(data.mensagem || data.message || ''))
+)
+if (aguardandoRotacao) {
+const seg = Math.max(15, Number(data.retry_after) || 60)
+return reply(`⏳ *PEDIDO EM ESPERA*
+
+🆔 ${uid}
+O sistema está aguardando uma janela saudável da rotação.
+Nova tentativa recomendada em aproximadamente ${seg}s.
+
+_Nenhum envio foi contado e nenhum uso foi cobrado._`)
+}
+
+await reagir(from, '❌')
 return reply(`❌ *${data?.mensagem || data?.message || 'Não foi possível enviar os likes.'}*`)
 }
 
