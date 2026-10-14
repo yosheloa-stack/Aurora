@@ -9,6 +9,7 @@ const { getContentType, jidNormalizedUser, proto, prepareWAMessageMedia, generat
 
 
 const { NomeDoBot, ownerName, prefix, channel, channeldl, API_URL, API_KEY_TOKITO, ownerNumber, CREDENTIALS_USER } = setting
+const aluguel = require('./DADOS_TOKITO/aluguel.js')
 
 // Caminho do ffmpeg: usa o binario estatico (ffmpeg-static) quando disponivel
 // e cai pro ffmpeg do sistema caso contrario.
@@ -355,7 +356,9 @@ const membrosGrupo = isGroup ? getMembros(groupMembers) : []
 const adminsNormalizados = groupAdmins.map(admin => jidNormalizedUser(String(admin || '')))
 const senderNormalizado = jidNormalizedUser(String(sender || ''))
 const botNormalizado = jidNormalizedUser(String(botNumber || ''))
-const isGroupAdmins = SoDono || adminsNormalizados.includes(senderNormalizado)
+// Quem alugou o bot no site manda nele como dono, mas só no grupo alugado.
+const DonoAluguel = isGroup && !SoDono && aluguel.ehDonoDoGrupo(from, sender)
+const isGroupAdmins = SoDono || DonoAluguel || adminsNormalizados.includes(senderNormalizado)
 const isBotGroupAdmins = !isGroup || adminsNormalizados.includes(botNormalizado)
 
 let vipAlterado = false
@@ -375,8 +378,8 @@ vipAlterado = true
 
 if (vipAlterado) fs.writeFileSync(caminhoVip, JSON.stringify(vip, null, 2))
 
-const isVip = vip.map(i => i.id).includes(sender) || SoDono
-const isCargo = SoDono ? 'Mestre' : isVip ? 'VIP' : 'Membro'
+const isVip = vip.map(i => i.id).includes(sender) || SoDono || DonoAluguel
+const isCargo = SoDono ? 'Mestre' : DonoAluguel ? 'Dono do aluguel' : isVip ? 'VIP' : 'Membro'
 const isChVip = isVip ? 'ꜱɪᴍ ✅' : 'ɴᴀᴏ ❌'
 const Res_SoDono = mess.onlyOwner()
 
@@ -575,6 +578,47 @@ quoted: selo
 
 
 switch (command) {
+
+case 'tokenaluguel': {
+if (!SoDono) return reply(mess.onlyOwner())
+if (isGroup) return reply('❌ Mande este comando no privado do bot, pra ninguém ver o token.')
+const novoToken = String(q || '').trim()
+if (novoToken.length < 12) return reply(`Use: ${prefix}tokenaluguel <o mesmo AURORA_RENTAL_TOKEN das Credenciais do site>`)
+aluguel.salvarConfig({ token: novoToken })
+aluguel.rodada().catch(() => {})
+return reply('✅ Token do aluguel salvo. O bot já está buscando os aluguéis pagos no site.')
+}
+break
+
+case 'sitealuguel': {
+if (!SoDono) return reply(mess.onlyOwner())
+const novoSite = String(q || '').trim()
+if (!/^https:\/\//i.test(novoSite)) return reply(`Use: ${prefix}sitealuguel https://autolikesystem.com.br`)
+aluguel.salvarConfig({ site: novoSite })
+return reply('✅ Endereço do site salvo: ' + aluguel.site())
+}
+break
+
+case 'aluguel':
+case 'alugueis': {
+if (isGroup) {
+const a = aluguel.doGrupo(from)
+if (!a) return reply(`Este grupo não tem aluguel ativo. Alugue em ${aluguel.site()}/aluguel-bot`)
+const dono = a.dono_jid ? '@' + a.dono_jid.split('@')[0] : '—'
+return reply(`🤖 *Aluguel do bot neste grupo*
+
+👑 Dono: ${dono}
+📅 Válido até: *${new Date(a.expira).toLocaleString('pt-BR', { timeZone: fuso })}*`, a.dono_jid ? [a.dono_jid] : [])
+}
+if (!SoDono) return reply(mess.onlyOwner())
+const ativos = aluguel.lista().filter(a => new Date(a.expira).getTime() > Date.now())
+return reply(`🤖 *Aluguéis ativos: ${ativos.length}*
+🔑 Token: ${aluguel.token() ? 'configurado ✅' : 'FALTANDO ❌ (use ' + prefix + 'tokenaluguel)'}
+🌐 Site: ${aluguel.site()}
+
+` + ativos.map(a => `• ${a.grupo_nome || a.grupo_jid} — até ${new Date(a.expira).toLocaleDateString('pt-BR', { timeZone: fuso })}`).join('\n'))
+}
+break
 
 case 'dono1':
 case 'dono2':
