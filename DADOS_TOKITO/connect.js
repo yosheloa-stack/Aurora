@@ -347,6 +347,9 @@ console.log(banner3?.string || colors.magenta('\nAURORA BASE\n'))
 console.log(banner2?.string || colors.magenta('Yosh'))
 console.log(colors.green(`\n✅ ${NomeDoBot} conectado com sucesso!\n`))
 
+// Aluguel automático: busca no site os aluguéis pagos e entra nos grupos.
+try { require('./aluguel.js').iniciar(tokito) } catch(e) { console.log(colors.red('[aluguel] não iniciou: ' + e.message)) }
+
 try {
 await tokito.sendPresenceUpdate('available')
 await tokito.updateProfileStatus(`[ ${NomeDoBot} ONLINE 🧊 ]`)

@@ -16,3 +16,6 @@ npm-debug.log*
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# Aluguel automático (token e aluguéis do servidor — nunca commitar)
+DADOS_TOKITO/database/aluguel/
